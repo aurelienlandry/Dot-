@@ -1,0 +1,17 @@
+{
+  "name": "dot-anticipation",
+  "version": "0.1.0",
+  "description": "Anticiper les coupures d'électricité au Cameroun : fusion de signaux, prévision et bilan.",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning src/server/main.ts",
+    "demo": "node --disable-warning=ExperimentalWarning src/sim/seed-demo.ts && npm start",
+    "seed:demo": "node --disable-warning=ExperimentalWarning src/sim/seed-demo.ts",
+    "test": "node --disable-warning=ExperimentalWarning --test test/*.test.ts",
+    "backtest": "node --disable-warning=ExperimentalWarning src/sim/backtest.ts"
+  }
+}

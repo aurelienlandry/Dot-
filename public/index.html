@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Dot — Courant</title>
+  <meta name="description" content="Anticiper les coupures d'électricité dans votre quartier.">
+  <meta name="theme-color" content="#0f172a">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="top">
+    <a href="#/" class="brand"><img src="/icon.svg" alt="" width="28" height="28"> Dot</a>
+    <span id="net" class="net" hidden>Hors ligne</span>
+  </header>
+  <div id="demo" class="demo" hidden>Mode démonstration : les données affichées sont simulées.</div>
+  <main id="view" aria-live="polite"></main>
+  <nav class="tabs">
+    <a href="#/" data-tab="home"><span aria-hidden="true">⌂</span>Chez moi</a>
+    <a href="#/carte" data-tab="carte"><span aria-hidden="true">◎</span>Quartiers</a>
+    <a href="#/bilan" data-tab="bilan"><span aria-hidden="true">▤</span>Bilan</a>
+    <a href="#/fiabilite" data-tab="fiabilite"><span aria-hidden="true">✓</span>Fiabilité</a>
+  </nav>
+  <div id="toast" class="toast" role="status" hidden></div>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
