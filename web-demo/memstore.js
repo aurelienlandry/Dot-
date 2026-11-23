@@ -11,6 +11,7 @@ export class MemoryStore {
     this.reputation = new Map();
     this.eps = [];
     this.predictions = [];
+    this.profiles = new Map();
     this.seq = 1;
   }
 
@@ -19,9 +20,28 @@ export class MemoryStore {
     this.observations.push({ ...o, id, scored: 0, demo });
     return id;
   }
-  observationsFor(zoneIds, from, to) {
-    const set = new Set(zoneIds);
-    return this.observations.filter((o) => set.has(o.zoneId) && o.at >= from && o.at <= to).sort((a, b) => a.at - b.at).map(({ id, scored, demo, ...o }) => o);
+  observationsNear(lat, lon, radiusKm, from, to) {
+    const dLat = radiusKm / 111;
+    const dLon = radiusKm / (111 * Math.cos((lat * Math.PI) / 180));
+    return this.observations
+      .filter((o) => o.at >= from && o.at <= to && Math.abs(o.lat - lat) <= dLat && Math.abs(o.lon - lon) <= dLon)
+      .sort((a, b) => a.at - b.at)
+      .map(({ id, scored, demo, ...o }) => o);
+  }
+  activeZoneIds(from, to) {
+    const ids = new Set(this.observations.filter((o) => o.at >= from && o.at <= to).map((o) => o.zoneId));
+    for (const e of this.eps) if (e.end === null) ids.add(e.zoneId);
+    return [...ids];
+  }
+  observationsBySource(sourceId) {
+    const mine = this.observations.filter((o) => o.sourceId === sourceId);
+    return { total: mine.length, judged: mine.filter((o) => o.scored === 1).length };
+  }
+  getProfile(sourceId) {
+    return this.profiles.get(sourceId) ?? null;
+  }
+  setProfile(sourceId, pseudo, now) {
+    this.profiles.set(sourceId, { pseudo, createdAt: this.profiles.get(sourceId)?.createdAt ?? now });
   }
   unscoredObservations(olderThan, newerThan) {
     return this.observations.filter((o) => o.scored === 0 && o.kind !== 'incident' && o.at <= olderThan && o.at >= newerThan).slice(0, 500).map(clone);
@@ -85,8 +105,9 @@ export class MemoryStore {
   addEpisode(e, demo = false) {
     this.eps.push({ ...e, id: this.seq++, demo });
   }
-  episodes(from, to) {
-    return this.eps.filter((e) => e.start <= to && (e.end === null || e.end >= from)).sort((a, b) => a.start - b.start).map(({ zoneId, start, end }) => ({ zoneId, start, end }));
+  episodes(from, to, zoneIds) {
+    const set = zoneIds ? new Set(zoneIds) : null;
+    return this.eps.filter((e) => e.start <= to && (e.end === null || e.end >= from) && (!set || set.has(e.zoneId))).sort((a, b) => a.start - b.start).map(({ zoneId, start, end }) => ({ zoneId, start, end }));
   }
   dataStart() {
     let m = Infinity;

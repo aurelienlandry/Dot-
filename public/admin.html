@@ -15,7 +15,7 @@
       <form id="f">
         <p><label>Jeton administrateur<br><input id="token" type="password" required style="width:100%"></label></p>
         <p><label>Source<br><select id="source"><option value="eneo">ENEO</option><option value="camwater">Camwater</option><option value="autre">Autre</option></select></label></p>
-        <p><label>Quartiers concernés (Ctrl/Maj pour plusieurs)<br><select id="zones" multiple size="10" required></select></label></p>
+        <p><label>Quartiers concernés (Ctrl/Maj pour plusieurs ; zone d'environ 1 km autour de chacun)<br><select id="zones" multiple size="10" required></select></label></p>
         <div class="row">
           <label>Début<br><input id="start" type="datetime-local" required></label>
           <label>Fin<br><input id="end" type="datetime-local" required></label>
@@ -39,14 +39,13 @@
     const toUtc = (v) => Date.parse(`${v}:00Z`) - TZ; // saisie en heure locale UTC+1
     const fmt = (t) => new Date(t).toLocaleString('fr-FR', { timeZone: 'Africa/Douala', dateStyle: 'short', timeStyle: 'short' });
     try { $('token').value = sessionStorage.getItem('dot.admin') || ''; } catch {}
-    const meta = await (await fetch('/api/zones')).json();
-    const names = Object.fromEntries(meta.zones.map((z) => [z.id, `${z.name} (${z.city})`]));
-    $('zones').innerHTML = meta.cities.map((c) => `<optgroup label="${esc(c)}">${meta.zones.filter((z) => z.city === c).map((z) => `<option value="${z.id}">${esc(z.name)}</option>`).join('')}</optgroup>`).join('');
+    const meta = await (await fetch('/api/meta')).json();
+    $('zones').innerHTML = meta.cities.map((c) => `<optgroup label="${esc(c.name)}">${meta.quartiers.filter((z) => z.city === c.name).map((z) => `<option value="${z.id}">${esc(z.name)}</option>`).join('')}</optgroup>`).join('');
 
     async function load() {
       const list = await (await fetch('/api/planned')).json();
       $('list').innerHTML = list.length
-        ? list.map((p) => `<li><b>${esc(p.sourceId.replace('official:', '').toUpperCase())}</b> ${fmt(p.start)} → ${fmt(p.end)} · ${p.zoneIds.map((z) => esc(names[z] ?? z)).join(', ')} ${p.note ? `· ${esc(p.note)}` : ''} <button data-del="${p.id}">Supprimer</button></li>`).join('')
+        ? list.map((p) => `<li><b>${esc(p.sourceId.replace('official:', '').toUpperCase())}</b> ${fmt(p.start)} → ${fmt(p.end)} · ${esc(p.label)} ${p.note ? `· ${esc(p.note)}` : ''} <button data-del="${p.id}">Supprimer</button></li>`).join('')
         : '<li class="muted">Aucune annonce.</li>';
       document.querySelectorAll('[data-del]').forEach((b) => (b.onclick = async () => {
         const r = await fetch(`/api/admin/planned/${b.dataset.del}`, { method: 'DELETE', headers: { authorization: `Bearer ${$('token').value}` } });
@@ -60,7 +59,7 @@
       try { sessionStorage.setItem('dot.admin', $('token').value); } catch {}
       const body = {
         source: $('source').value,
-        zoneIds: [...$('zones').selectedOptions].map((o) => o.value),
+        quartiers: [...$('zones').selectedOptions].map((o) => o.value),
         start: toUtc($('start').value),
         end: toUtc($('end').value),
         note: $('note').value || undefined,

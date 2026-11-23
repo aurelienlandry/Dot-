@@ -26,7 +26,8 @@ Prérequis : Node.js ≥ 22.18. **Aucune dépendance à installer.**
 npm run demo        # données de démonstration simulées + serveur sur http://localhost:8080
 npm start           # serveur seul (base vide, vraies données)
 npm test            # tests du moteur
-npm run backtest    # banc d'essai de fiabilité (≈ 1 min) ; options : -- --sensors 12 --days 14
+npm run backtest    # banc d'essai de fiabilité (≈ 2 min) ; options : -- --sensors 12 --days 14
+npm run build:demo  # démo autonome (sans serveur) dans dist-demo/
 ```
 
 Variables : `PORT` (8080), `DB_PATH` (`data/dot.sqlite`), `ADMIN_TOKEN` (sinon un jeton temporaire est affiché au démarrage).
@@ -47,14 +48,16 @@ test/         tests
 
 | Méthode | Chemin | Rôle |
 |---|---|---|
-| GET | `/api/zones` | villes, quartiers, types d'incident |
-| GET | `/api/status?city=Douala` | état de tous les quartiers d'une ville |
-| GET | `/api/zone/:id` | état détaillé + raisons + prévision 24 h + créneaux |
-| POST | `/api/report` | `{deviceId, zoneId, state: "out"\|"on", at?}` |
-| POST | `/api/device` | `{deviceId, zoneId, event: "power_lost"\|"power_back"\|"charging", at?}` |
-| POST | `/api/incident` | `{deviceId, zoneId, incident}` |
-| GET | `/api/bilan?city=&period=month\|year\|all` | bilan des coupures |
+| GET | `/api/meta` | villes, quartiers (repères), types d'incident |
+| GET | `/api/place?lat=&lon=` | état d'un lieu : courant ou pas, depuis quand, retour probable, 24 h, annonces, 30 derniers jours |
+| GET | `/api/map?city=Douala` | zones de coupure (point + rayon), zones à risque, coupures annoncées |
+| POST | `/api/report` | `{deviceId, lat, lon, state: "out"\|"on"}` |
+| POST | `/api/device` | `{deviceId, lat, lon, event: "power_lost"\|"power_back"\|"charging"\|"wifi_lost"\|"wifi_back"}` |
+| POST | `/api/incident` | `{deviceId, lat, lon, incident}` |
+| GET/POST | `/api/profile` | pseudo, nombre de signalements, fiabilité |
+| GET | `/api/history?lat=&lon=&period=` | bilan d'un lieu |
+| GET | `/api/bilan?city=&period=month\|year` | bilan par quartier |
 | GET | `/api/reliability` | calibration des prévisions, fiabilité des sources |
 | POST/DELETE | `/api/admin/planned[/id]` | coupures programmées (jeton admin) |
 
-Vie privée : aucun compte, aucun nom ; un identifiant anonyme par appareil ; seul le **quartier** est envoyé, jamais la position.
+Vie privée : seul un pseudo est demandé ; les lieux (maison, travail…) restent sur le téléphone ; les signalements partent avec une position arrondie à ~100 m.

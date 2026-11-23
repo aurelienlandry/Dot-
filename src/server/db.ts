@@ -1,6 +1,8 @@
 import { DatabaseSync } from 'node:sqlite';
 import type { Episode } from '../engine/baseline.ts';
-import type { IncidentType, Observation, PlannedOutage, Reputation, WeatherPoint } from '../engine/types.ts';
+import type { DeviceEvent, IncidentType, Observation, PlannedOutage, Reputation, WeatherPoint } from '../engine/types.ts';
+
+const SCHEMA_VERSION = 2;
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS observations (
@@ -8,17 +10,23 @@ CREATE TABLE IF NOT EXISTS observations (
   kind TEXT NOT NULL,
   source_id TEXT NOT NULL,
   zone_id TEXT NOT NULL,
+  lat REAL NOT NULL,
+  lon REAL NOT NULL,
   at INTEGER NOT NULL,
   value TEXT NOT NULL,
   scored INTEGER NOT NULL DEFAULT 0,
   demo INTEGER NOT NULL DEFAULT 0
 );
-CREATE INDEX IF NOT EXISTS obs_zone_at ON observations(zone_id, at);
+CREATE INDEX IF NOT EXISTS obs_at ON observations(at);
+CREATE INDEX IF NOT EXISTS obs_geo ON observations(lat, lon, at);
 CREATE INDEX IF NOT EXISTS obs_scored ON observations(scored, at);
 CREATE TABLE IF NOT EXISTS planned (
   id INTEGER PRIMARY KEY,
   source_id TEXT NOT NULL,
-  zone_ids TEXT NOT NULL,
+  lat REAL NOT NULL,
+  lon REAL NOT NULL,
+  radius_km REAL NOT NULL,
+  label TEXT NOT NULL,
   start INTEGER NOT NULL,
   end INTEGER NOT NULL,
   note TEXT,
@@ -47,6 +55,7 @@ CREATE TABLE IF NOT EXISTS episodes (
   demo INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS ep_zone ON episodes(zone_id, start);
+CREATE INDEX IF NOT EXISTS ep_open ON episodes(end);
 CREATE TABLE IF NOT EXISTS predictions (
   id INTEGER PRIMARY KEY,
   zone_id TEXT NOT NULL,
@@ -58,13 +67,18 @@ CREATE TABLE IF NOT EXISTS predictions (
   resolved INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS pred_target ON predictions(resolved, target_at);
+CREATE TABLE IF NOT EXISTS profiles (
+  source_id TEXT PRIMARY KEY,
+  pseudo TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
 `;
 
 type Row = Record<string, unknown>;
 
 function toObservation(r: Row): Observation {
-  const base = { sourceId: r.source_id as string, zoneId: r.zone_id as string, at: Number(r.at) };
-  if (r.kind === 'device') return { kind: 'device', ...base, event: r.value as 'power_lost' | 'power_back' | 'charging' };
+  const base = { sourceId: r.source_id as string, zoneId: r.zone_id as string, lat: Number(r.lat), lon: Number(r.lon), at: Number(r.at) };
+  if (r.kind === 'device') return { kind: 'device', ...base, event: r.value as DeviceEvent };
   if (r.kind === 'report') return { kind: 'report', ...base, state: r.value as 'out' | 'on' };
   return { kind: 'incident', ...base, incident: r.value as IncidentType };
 }
@@ -73,12 +87,22 @@ function toPlanned(r: Row): PlannedOutage {
   return {
     id: Number(r.id),
     sourceId: r.source_id as string,
-    zoneIds: JSON.parse(r.zone_ids as string),
+    lat: Number(r.lat),
+    lon: Number(r.lon),
+    radiusKm: Number(r.radius_km),
+    label: r.label as string,
     start: Number(r.start),
     end: Number(r.end),
     note: (r.note as string) ?? undefined,
     url: (r.url as string) ?? undefined,
   };
+}
+
+/** Boîte englobante d'un cercle (pour les requêtes par zone). */
+function bbox(lat: number, lon: number, radiusKm: number) {
+  const dLat = radiusKm / 111;
+  const dLon = radiusKm / (111 * Math.cos((lat * Math.PI) / 180));
+  return [lat - dLat, lat + dLat, lon - dLon, lon + dLon];
 }
 
 export class Store {
@@ -87,6 +111,12 @@ export class Store {
   constructor(path: string) {
     this.db = new DatabaseSync(path);
     this.db.exec('PRAGMA journal_mode = WAL;');
+    const version = Number((this.db.prepare('PRAGMA user_version').get() as Row).user_version);
+    if (version !== SCHEMA_VERSION) {
+      // Prototype : changement de schéma = on repart d'une base vide.
+      for (const t of ['observations', 'planned', 'weather', 'reputation', 'episodes', 'predictions', 'profiles']) this.db.exec(`DROP TABLE IF EXISTS ${t}`);
+      this.db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
+    }
     this.db.exec(SCHEMA);
   }
 
@@ -94,15 +124,28 @@ export class Store {
   addObservation(o: Observation, demo = false): number {
     const value = o.kind === 'device' ? o.event : o.kind === 'report' ? o.state : o.incident;
     const r = this.db
-      .prepare('INSERT INTO observations (kind, source_id, zone_id, at, value, demo) VALUES (?, ?, ?, ?, ?, ?)')
-      .run(o.kind, o.sourceId, o.zoneId, o.at, value, demo ? 1 : 0);
+      .prepare('INSERT INTO observations (kind, source_id, zone_id, lat, lon, at, value, demo) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(o.kind, o.sourceId, o.zoneId, o.lat, o.lon, o.at, value, demo ? 1 : 0);
     return Number(r.lastInsertRowid);
   }
 
-  observationsFor(zoneIds: string[], from: number, to: number): Observation[] {
-    if (!zoneIds.length) return [];
-    const q = `SELECT * FROM observations WHERE zone_id IN (${zoneIds.map(() => '?').join(',')}) AND at >= ? AND at <= ? ORDER BY at`;
-    return (this.db.prepare(q).all(...zoneIds, from, to) as Row[]).map(toObservation);
+  observationsNear(lat: number, lon: number, radiusKm: number, from: number, to: number): Observation[] {
+    const [a, b, c, d] = bbox(lat, lon, radiusKm);
+    const rows = this.db.prepare('SELECT * FROM observations WHERE lat BETWEEN ? AND ? AND lon BETWEEN ? AND ? AND at >= ? AND at <= ? ORDER BY at').all(a, b, c, d, from, to) as Row[];
+    return rows.map(toObservation);
+  }
+
+  /** Cases où quelque chose s'est passé récemment (pour le suivi et la carte). */
+  activeZoneIds(from: number, to: number): string[] {
+    const rows = this.db
+      .prepare('SELECT DISTINCT zone_id FROM observations WHERE at >= ? AND at <= ? UNION SELECT zone_id FROM episodes WHERE end IS NULL')
+      .all(from, to) as Row[];
+    return rows.map((r) => r.zone_id as string);
+  }
+
+  observationsBySource(sourceId: string): { total: number; judged: number } {
+    const r = this.db.prepare('SELECT COUNT(*) AS n, SUM(CASE WHEN scored = 1 THEN 1 ELSE 0 END) AS j FROM observations WHERE source_id = ?').get(sourceId) as Row;
+    return { total: Number(r.n), judged: Number(r.j ?? 0) };
   }
 
   unscoredObservations(olderThan: number, newerThan: number): (Observation & { id: number })[] {
@@ -123,8 +166,8 @@ export class Store {
   // --- Coupures programmées
   addPlanned(p: Omit<PlannedOutage, 'id'>, demo = false): number {
     const r = this.db
-      .prepare('INSERT INTO planned (source_id, zone_ids, start, end, note, url, demo) VALUES (?, ?, ?, ?, ?, ?, ?)')
-      .run(p.sourceId, JSON.stringify(p.zoneIds), p.start, p.end, p.note ?? null, p.url ?? null, demo ? 1 : 0);
+      .prepare('INSERT INTO planned (source_id, lat, lon, radius_km, label, start, end, note, url, demo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(p.sourceId, p.lat, p.lon, p.radiusKm, p.label, p.start, p.end, p.note ?? null, p.url ?? null, demo ? 1 : 0);
     return Number(r.lastInsertRowid);
   }
 
@@ -166,7 +209,19 @@ export class Store {
     this.db.prepare('INSERT OR REPLACE INTO reputation (source_id, alpha, beta) VALUES (?, ?, ?)').run(sourceId, rep.alpha, rep.beta);
   }
 
-  // --- Épisodes de coupure
+  // --- Profils (pseudo uniquement)
+  getProfile(sourceId: string): { pseudo: string; createdAt: number } | null {
+    const r = this.db.prepare('SELECT * FROM profiles WHERE source_id = ?').get(sourceId) as Row | undefined;
+    return r ? { pseudo: r.pseudo as string, createdAt: Number(r.created_at) } : null;
+  }
+
+  setProfile(sourceId: string, pseudo: string, now: number): void {
+    this.db
+      .prepare('INSERT INTO profiles (source_id, pseudo, created_at) VALUES (?, ?, ?) ON CONFLICT(source_id) DO UPDATE SET pseudo = excluded.pseudo')
+      .run(sourceId, pseudo, now);
+  }
+
+  // --- Épisodes de coupure (par case)
   openEpisode(zoneId: string): { id: number; start: number } | null {
     const r = this.db.prepare('SELECT id, start FROM episodes WHERE zone_id = ? AND end IS NULL ORDER BY start DESC LIMIT 1').get(zoneId) as Row | undefined;
     return r ? { id: Number(r.id), start: Number(r.start) } : null;
@@ -184,8 +239,11 @@ export class Store {
     this.db.prepare('INSERT INTO episodes (zone_id, start, end, demo) VALUES (?, ?, ?, ?)').run(e.zoneId, e.start, e.end, demo ? 1 : 0);
   }
 
-  episodes(from: number, to: number): Episode[] {
-    const rows = this.db.prepare('SELECT zone_id, start, end FROM episodes WHERE start <= ? AND (end IS NULL OR end >= ?) ORDER BY start').all(to, from) as Row[];
+  episodes(from: number, to: number, zoneIds?: string[]): Episode[] {
+    const filter = zoneIds ? `AND zone_id IN (${zoneIds.map(() => '?').join(',') || "''"})` : '';
+    const rows = this.db
+      .prepare(`SELECT zone_id, start, end FROM episodes WHERE start <= ? AND (end IS NULL OR end >= ?) ${filter} ORDER BY start`)
+      .all(to, from, ...(zoneIds ?? [])) as Row[];
     return rows.map((r) => ({ zoneId: r.zone_id as string, start: Number(r.start), end: r.end === null ? null : Number(r.end) }));
   }
 

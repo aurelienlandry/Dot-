@@ -5,22 +5,23 @@ import { brier, reliabilityBuckets, truthFrom } from '../src/engine/calibration.
 import { episodeStep } from '../src/engine/episodes.ts';
 import { forecast, probabilityAt, windows } from '../src/engine/forecast.ts';
 import { DAY, HOUR, hourOfWeek, MINUTE } from '../src/engine/math.ts';
-import { combine, latestCluster, localEvidence, peersOf } from '../src/engine/nowcast.ts';
+import { combine, latestCluster, localEvidence, summarize } from '../src/engine/nowcast.ts';
 import { judgeClaim, reliability, updateReputation } from '../src/engine/reputation.ts';
-import type { Observation, Reputation } from '../src/engine/types.ts';
-import { ZONES_BY_ID } from '../src/data/zones.ts';
+import type { Observation, Reputation, Zone } from '../src/engine/types.ts';
+import { cellOf, cellsWithin, groupAreas } from '../src/engine/geo.ts';
 
 const NOW = Date.UTC(2026, 10, 20, 18, 0); // jeudi 19h heure de Douala
-const makepe = ZONES_BY_ID.get('dla-makepe')!;
-const kotto = ZONES_BY_ID.get('dla-kotto')!;
+const makepe: Zone = { id: 'dla-makepe', name: 'Makepe', city: 'Douala', lat: 4.08, lon: 9.748 };
+const kotto: Zone = { id: 'dla-kotto', name: 'Kotto', city: 'Douala', lat: 4.075, lon: 9.765 };
+const P = { lat: 4.08, lon: 9.748 };
 
 function now(observations: Observation[], reps = new Map<string, Reputation>(), zone = makepe) {
   const local = localEvidence({ zone, at: NOW, observations, planned: [], reputations: reps, baseline: defaultBaseline() });
   return combine(zone, NOW, local, []);
 }
 
-const dev = (id: string, minAgo: number, event: 'power_lost' | 'power_back' | 'charging' = 'power_lost'): Observation => ({
-  kind: 'device', sourceId: id, zoneId: 'dla-makepe', at: NOW - minAgo * MINUTE, event,
+const dev = (id: string, minAgo: number, event: 'power_lost' | 'power_back' | 'charging' | 'wifi_lost' = 'power_lost'): Observation => ({
+  kind: 'device', sourceId: id, zoneId: 'dla-makepe', ...P, at: NOW - minAgo * MINUTE, event,
 });
 
 test("sans aucun indice, on reste sur l'a priori et la confiance est faible", () => {
@@ -55,10 +56,10 @@ test('le retour groupé du courant annule la coupure', () => {
 });
 
 test('rendements décroissants : des dizaines de comptes neufs ne valent pas des sources fiables', () => {
-  const spam: Observation[] = Array.from({ length: 30 }, (_, i) => ({ kind: 'report', sourceId: `bot${i}`, zoneId: 'dla-makepe', at: NOW - MINUTE, state: 'out' }));
+  const spam: Observation[] = Array.from({ length: 30 }, (_, i) => ({ kind: 'report', sourceId: `bot${i}`, zoneId: 'dla-makepe', ...P, at: NOW - MINUTE, state: 'out' }));
   const reliable = new Map<string, Reputation>([['vet', { alpha: 40, beta: 2 }]]);
   const nSpam = now(spam);
-  const nTruth = now([{ kind: 'report', sourceId: 'vet', zoneId: 'dla-makepe', at: NOW - MINUTE, state: 'on' }, ...spam], reliable);
+  const nTruth = now([{ kind: 'report', sourceId: 'vet', zoneId: 'dla-makepe', ...P, at: NOW - MINUTE, state: 'on' }, ...spam], reliable);
   // 30 comptes inconnus rendent la coupure probable, mais jamais certaine.
   assert.ok(nSpam.pOut > 0.7 && nSpam.pOut < 0.95, `pOut=${nSpam.pOut}`);
   assert.ok(nTruth.pOut < nSpam.pOut);
@@ -69,7 +70,7 @@ test('rendements décroissants : des dizaines de comptes neufs ne valent pas des
 });
 
 test("un incident grave fait monter la probabilité avant toute confirmation, et plus encore s'il est recoupé", () => {
-  const inc = (id: string): Observation => ({ kind: 'incident', sourceId: id, zoneId: 'dla-makepe', at: NOW - 5 * MINUTE, incident: 'transformer_fire' });
+  const inc = (id: string): Observation => ({ kind: 'incident', sourceId: id, zoneId: 'dla-makepe', ...P, at: NOW - 5 * MINUTE, incident: 'transformer_fire' });
   const base = now([]).pOut;
   const one = now([inc('x')]);
   const three = now([inc('x'), inc('y'), inc('z')]);
@@ -78,17 +79,34 @@ test("un incident grave fait monter la probabilité avant toute confirmation, et
   assert.ok(three.incidentSeverity > one.incidentSeverity);
 });
 
-test('propagation aux quartiers du même départ électrique', () => {
-  const locals = new Map();
-  const obsKotto: Observation[] = ['a', 'b', 'c', 'd'].map((id) => ({ kind: 'device', sourceId: id, zoneId: 'dla-kotto', at: NOW - 3 * MINUTE, event: 'power_lost' }));
-  for (const z of [makepe, kotto]) {
-    const observations = z.id === 'dla-kotto' ? obsKotto : [];
-    locals.set(z.id, { zone: z, local: localEvidence({ zone: z, at: NOW, observations, planned: [], reputations: new Map(), baseline: defaultBaseline() }) });
-  }
-  const alone = combine(makepe, NOW, locals.get('dla-makepe').local, []);
-  const withPeers = combine(makepe, NOW, locals.get('dla-makepe').local, peersOf(makepe, locals));
-  assert.ok(withPeers.pOut > alone.pOut * 3, `${alone.pOut} -> ${withPeers.pOut}`);
-  assert.ok(withPeers.evidence.some((e) => e.kind === 'propagation' && e.label.includes('Kotto')));
+test('propagation : une coupure à 700 m pèse, une coupure à 5 km presque pas', () => {
+  const obsKotto: Observation[] = ['a', 'b', 'c', 'd'].map((id) => ({ kind: 'device', sourceId: id, zoneId: 'dla-kotto', lat: kotto.lat, lon: kotto.lon, at: NOW - 3 * MINUTE, event: 'power_lost' }));
+  const args = { at: NOW, planned: [], reputations: new Map(), baseline: defaultBaseline() };
+  const mine = localEvidence({ ...args, zone: makepe, observations: [] });
+  const theirs = localEvidence({ ...args, zone: kotto, observations: obsKotto });
+  const alone = combine(makepe, NOW, mine, []);
+  const close = combine(makepe, NOW, mine, [{ zone: kotto, local: theirs, distanceKm: 0.7 }]);
+  const far = combine(makepe, NOW, mine, [{ zone: kotto, local: theirs, distanceKm: 5 }]);
+  assert.ok(close.pOut > alone.pOut * 3, `${alone.pOut} -> ${close.pOut}`);
+  assert.ok(far.pOut < alone.pOut * 1.5);
+  assert.equal(summarize(close), 'Coupure signalée tout près');
+});
+
+test('le Wi-Fi de la maison qui disparaît chez plusieurs personnes ensemble compte comme une coupure', () => {
+  const n = now([dev('a', 6, 'wifi_lost'), dev('b', 5), dev('c', 5, 'wifi_lost')]);
+  assert.ok(n.pOut > 0.8, `pOut=${n.pOut}`);
+  assert.equal(summarize(n), 'Confirmé par des habitants');
+});
+
+test('grille : cases, voisinage et regroupement en zones (point + rayon)', () => {
+  const c = cellOf(4.0801, 9.7481);
+  assert.equal(c.id, cellOf(4.0805, 9.7485).id);
+  assert.ok(cellsWithin(4.08, 9.748, 0.7).length >= 4);
+  const areas = groupAreas([
+    { lat: 4.08, lon: 9.748, pOut: 0.9 }, { lat: 4.084, lon: 9.748, pOut: 0.8 }, { lat: 4.2, lon: 9.9, pOut: 0.95 }, { lat: 4.05, lon: 9.7, pOut: 0.1 },
+  ], 0.6);
+  assert.equal(areas.length, 2);
+  assert.ok(areas[0].radiusKm > 0.3 && areas[0].radiusKm < 1);
 });
 
 test('réputation : se tromper fait perdre de l’influence, avoir raison en fait gagner', () => {
@@ -105,8 +123,8 @@ test('réputation : se tromper fait perdre de l’influence, avoir raison en fai
 });
 
 test('prévision : une coupure programmée apparaît dans la fenêtre annoncée', () => {
-  const planned = [{ id: 1, sourceId: 'eneo', zoneIds: ['dla-makepe'], start: NOW + 2 * HOUR, end: NOW + 5 * HOUR }];
-  const pts = forecast({ zoneId: 'dla-makepe', at: NOW, pNow: 0.05, baseline: defaultBaseline(), planned, reputations: new Map(), weatherByHour: new Map(), incidentSeverity: 0 });
+  const planned = [{ id: 1, sourceId: 'eneo', lat: 4.081, lon: 9.749, radiusKm: 1, label: 'Makepe', start: NOW + 2 * HOUR, end: NOW + 5 * HOUR }];
+  const pts = forecast({ ...P, at: NOW, pNow: 0.05, baseline: defaultBaseline(), planned, reputations: new Map(), weatherByHour: new Map(), incidentSeverity: 0 });
   assert.ok(probabilityAt(pts, NOW + 3 * HOUR)! > 0.7);
   assert.ok(probabilityAt(pts, NOW + HOUR)! < 0.2);
   assert.ok(probabilityAt(pts, NOW + 8 * HOUR)! < 0.2);
@@ -115,7 +133,7 @@ test('prévision : une coupure programmée apparaît dans la fenêtre annoncée'
 });
 
 test("prévision : une coupure en cours se résorbe selon la durée moyenne, plus lentement s'il y a un incident grave", () => {
-  const args = { zoneId: 'dla-makepe', at: NOW, pNow: 0.95, baseline: defaultBaseline(), planned: [], reputations: new Map(), weatherByHour: new Map() };
+  const args = { ...P, at: NOW, pNow: 0.95, baseline: defaultBaseline(), planned: [], reputations: new Map(), weatherByHour: new Map() };
   const normal = probabilityAt(forecast({ ...args, incidentSeverity: 0 }), NOW + 3 * HOUR)!;
   const severe = probabilityAt(forecast({ ...args, incidentSeverity: 2 }), NOW + 3 * HOUR)!;
   assert.ok(normal < 0.5);

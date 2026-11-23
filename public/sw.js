@@ -1,6 +1,6 @@
 // Service worker : l'appli s'ouvre même sans réseau, avec les dernières données connues.
-const SHELL = 'dot-shell-v1';
-const FILES = ['/', '/index.html', '/style.css', '/app.js', '/icon.svg', '/manifest.webmanifest'];
+const SHELL = 'dot-shell-v2';
+const FILES = ['/', '/index.html', '/style.css', '/app.js', '/icon.svg', '/manifest.webmanifest', '/vendor/leaflet/leaflet.js', '/vendor/leaflet/leaflet.css'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(SHELL).then((c) => c.addAll(FILES)).then(() => self.skipWaiting()));

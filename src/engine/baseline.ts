@@ -14,6 +14,8 @@ export interface Episode {
 /** Valeurs par défaut sans aucune donnée : ~1 coupure tous les 2 jours, 2 h 30 en moyenne. */
 export const DEFAULT_RATE_PER_HOUR = 0.02;
 export const DEFAULT_MEAN_HOURS = 2.5;
+/** Clé du profil moyen de la ville dans le résultat de learnBaselines. */
+export const CITY_KEY = '*';
 
 export function defaultBaseline(): ZoneBaseline {
   return { startsPerHour: new Array(168).fill(DEFAULT_RATE_PER_HOUR), meanOutageHours: DEFAULT_MEAN_HOURS };
@@ -24,6 +26,7 @@ export function learnBaselines(episodes: Episode[], zoneIds: string[], from: num
   const totalHours = Math.max(0, (to - from) / HOUR);
   if (totalHours < 24 || zoneIds.length === 0) {
     for (const z of zoneIds) result.set(z, defaultBaseline());
+    result.set(CITY_KEY, defaultBaseline());
     return result;
   }
 
@@ -73,6 +76,9 @@ export function learnBaselines(episodes: Episode[], zoneIds: string[], from: num
     allN += durN.get(z) ?? 0;
   }
   const cityMean = (allDur + 5 * DEFAULT_MEAN_HOURS) / (allN + 5);
+
+  // Profil moyen de la ville : utilisé pour un endroit sans historique propre.
+  result.set(CITY_KEY, { startsPerHour: cityRate.slice(), meanOutageHours: cityMean });
 
   for (const z of zoneIds) {
     // Facteur multiplicatif du quartier : est-il plus ou moins touché que la moyenne de la ville ?

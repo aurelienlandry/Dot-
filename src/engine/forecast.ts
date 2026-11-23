@@ -6,13 +6,14 @@
 //  - une coupure se termine au rythme μ = 1 / durée moyenne (plus lent si un incident grave est en cours) ;
 //  - les coupures programmées annoncées se superposent, pondérées par la fiabilité de leur source.
 
-import { hourOfWeek, hourStart, HOUR, MINUTE } from './math.ts';
+import { haversineKm, hourOfWeek, hourStart, HOUR, MINUTE } from './math.ts';
 import { weatherMultiplier } from './nowcast.ts';
 import { DEFAULT_PLANNED_REPUTATION, reliability } from './reputation.ts';
 import type { ForecastPoint, PlannedOutage, Reputation, WeatherPoint, ZoneBaseline } from './types.ts';
 
 export interface ForecastInput {
-  zoneId: string;
+  lat: number;
+  lon: number;
   at: number;
   pNow: number;
   baseline: ZoneBaseline;
@@ -32,7 +33,7 @@ export function forecast(input: ForecastInput): ForecastPoint[] {
   const stepH = step / HOUR;
   const slowRepair = input.incidentSeverity > 1.5 ? 0.4 : 1;
   const mu = (1 / input.baseline.meanOutageHours) * slowRepair;
-  const planned = input.planned.filter((p) => p.zoneIds.includes(input.zoneId));
+  const planned = input.planned.filter((p) => haversineKm(input.lat, input.lon, p.lat, p.lon) <= p.radiusKm);
 
   const points: ForecastPoint[] = [];
   let p = input.pNow;
@@ -97,4 +98,11 @@ export function windows(points: ForecastPoint[], test: (p: ForecastPoint) => boo
   }
   flush();
   return out;
+}
+
+/** Heure probable de retour du courant : premier instant où la coupure devient moins probable qu'improbable. */
+export function likelyRestore(points: ForecastPoint[]): number | null {
+  if (!points.length || points[0].pOut < 0.5) return null;
+  const p = points.find((x) => x.pOut < 0.5);
+  return p ? p.at : null;
 }

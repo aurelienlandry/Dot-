@@ -10,7 +10,8 @@
 //
 //   npm run backtest  [-- --sensors 6 --days 14]
 
-import { ZONES } from '../data/zones.ts';
+import { QUARTIERS } from '../data/zones.ts';
+import { blur, cellOf, cellsWithin } from '../engine/geo.ts';
 import { learnBaselines } from '../engine/baseline.ts';
 import { brier } from '../engine/calibration.ts';
 import { forecast, probabilityAt } from '../engine/forecast.ts';
@@ -48,7 +49,7 @@ export function runBacktest(opts: BacktestOptions = {}) {
   const testDays = opts.testDays ?? 14;
   const r = rng(opts.seed ?? 7);
 
-  const zones = ZONES.filter((z) => z.city === city);
+  const zones = QUARTIERS.filter((z) => z.city === city);
   const t0 = Date.UTC(2026, 6, 1); // juillet : saison des pluies, cas difficile
   const testStart = t0 + trainDays * DAY;
   const testEnd = testStart + testDays * DAY;
@@ -61,12 +62,24 @@ export function runBacktest(opts: BacktestOptions = {}) {
   const service = new Service(store);
   // L'historique d'entraînement est supposé connu (comme après plusieurs mois de fonctionnement).
   store.db.exec('BEGIN');
-  for (const eps of truth.values()) for (const e of eps) if (e.start < testStart) store.addEpisode(e);
+  for (const [zid, eps] of truth) {
+    const q = zones.find((z) => z.id === zid)!;
+    const cells = cellsWithin(q.lat, q.lon, 0.8);
+    for (const e of eps) if (e.start < testStart) for (const c of cells) store.addEpisode({ ...e, zoneId: c.id });
+  }
   store.db.exec('COMMIT');
   service.refreshBaselines(testStart, true);
 
-  // --- Génération des signaux de la période de test.
+  // --- Génération des signaux de la période de test (chaque personne a un domicile fixe à < 350 m du centre).
   const events: Observation[] = [];
+  const homes = new Map<string, { lat: number; lon: number; zoneId: string }>();
+  const home = (id: string, z: { lat: number; lon: number }) => {
+    if (!homes.has(id)) {
+      const p = blur(z.lat + (r() - 0.5) * 0.006, z.lon + (r() - 0.5) * 0.006);
+      homes.set(id, { ...p, zoneId: cellOf(p.lat, p.lon).id });
+    }
+    return homes.get(id)!;
+  };
   const trollIds = new Set<string>();
   for (const z of zones) {
     const eps = truth.get(z.id)!.filter((e) => (e.end ?? Infinity) > testStart && e.start < testEnd);
@@ -75,27 +88,27 @@ export function runBacktest(opts: BacktestOptions = {}) {
       const hasGenerator = r() < generatorShare;
       // Débranchements aléatoires : ~1 toutes les 6 h quand le téléphone est en charge.
       for (let t = testStart; t < testEnd; t += 10 * MINUTE) {
-        if (r() < (10 / 60) * (1 / 6) * 0.5) events.push({ kind: 'device', sourceId: id, zoneId: z.id, at: t + r() * 10 * MINUTE, event: 'power_lost' });
+        if (r() < (10 / 60) * (1 / 6) * 0.5) events.push({ kind: 'device', sourceId: id, ...home(id, z), at: t + r() * 10 * MINUTE, event: 'power_lost' });
         // Battement « en charge » quand l'appli est ouverte et que le courant est là (ou groupe électrogène).
-        if (r() < 0.15 && (hasGenerator || !isOutAt(eps, t))) events.push({ kind: 'device', sourceId: id, zoneId: z.id, at: t, event: 'charging' });
+        if (r() < 0.15 && (hasGenerator || !isOutAt(eps, t))) events.push({ kind: 'device', sourceId: id, ...home(id, z), at: t, event: 'charging' });
       }
       if (hasGenerator) continue;
       for (const e of eps) {
-        if (r() < 0.5 && e.start >= testStart) events.push({ kind: 'device', sourceId: id, zoneId: z.id, at: e.start + r() * MINUTE, event: 'power_lost' });
-        if (r() < 0.5 && e.end !== null && e.end < testEnd) events.push({ kind: 'device', sourceId: id, zoneId: z.id, at: e.end + r() * 1.5 * MINUTE, event: 'power_back' });
+        if (r() < 0.5 && e.start >= testStart) events.push({ kind: 'device', sourceId: id, ...home(id, z), at: e.start + r() * MINUTE, event: 'power_lost' });
+        if (r() < 0.5 && e.end !== null && e.end < testEnd) events.push({ kind: 'device', sourceId: id, ...home(id, z), at: e.end + r() * 1.5 * MINUTE, event: 'power_back' });
       }
     }
     for (let p = 0; p < reporters; p++) {
       const id = `dev:${z.id}-h${p}`;
       for (const e of eps) {
-        if (r() < 0.25 && e.start >= testStart) events.push({ kind: 'report', sourceId: id, zoneId: z.id, at: e.start + (5 + r() * 35) * MINUTE, state: 'out' });
-        if (r() < 0.1 && e.end !== null && e.end < testEnd) events.push({ kind: 'report', sourceId: id, zoneId: z.id, at: e.end + (2 + r() * 20) * MINUTE, state: 'on' });
+        if (r() < 0.25 && e.start >= testStart) events.push({ kind: 'report', sourceId: id, ...home(id, z), at: e.start + (5 + r() * 35) * MINUTE, state: 'out' });
+        if (r() < 0.1 && e.end !== null && e.end < testEnd) events.push({ kind: 'report', sourceId: id, ...home(id, z), at: e.end + (2 + r() * 20) * MINUTE, state: 'on' });
       }
     }
     for (let k = 0; k < trolls; k++) {
       const id = `dev:${z.id}-troll${k}`;
       trollIds.add(id);
-      for (let t = testStart; t < testEnd; t += HOUR) if (r() < 0.12) events.push({ kind: 'report', sourceId: id, zoneId: z.id, at: t + r() * HOUR, state: 'out' });
+      for (let t = testStart; t < testEnd; t += HOUR) if (r() < 0.12) events.push({ kind: 'report', sourceId: id, ...home(id, z), at: t + r() * HOUR, state: 'out' });
     }
   }
   events.sort((a, b) => a.at - b.at);
@@ -118,9 +131,8 @@ export function runBacktest(opts: BacktestOptions = {}) {
     if ((t - testStart) % (30 * MINUTE) === 0) service.scoreSources(t);
     service.tick(t);
 
-    const nowcasts = service.nowcastCity(city, t);
     for (const z of zones) {
-      const n = nowcasts.get(z.id)!;
+      const n = service.nowcastAt(z.lat, z.lon, t);
       const eps = truth.get(z.id)!;
       const out = isOutAt(eps, t);
       total++;
@@ -134,8 +146,8 @@ export function runBacktest(opts: BacktestOptions = {}) {
       }
       // Prévisions toutes les heures, comparées à la climatologie (taux moyen sans indices).
       if ((t - testStart) % HOUR === 0) {
-        const b = service.baseline(z.id);
-        const pts = forecast({ zoneId: z.id, at: t, pNow: n.pOut, baseline: b, planned: [], reputations: new Map(), weatherByHour: new Map(), incidentSeverity: n.incidentSeverity, horizonH: 3 });
+        const b = service.baseline(cellOf(z.lat, z.lon).id, city);
+        const pts = forecast({ lat: z.lat, lon: z.lon, at: t, pNow: n.pOut, baseline: b, planned: [], reputations: new Map(), weatherByHour: new Map(), incidentSeverity: n.incidentSeverity, horizonH: 3 });
         for (const h of [1, 3]) {
           const naive = (() => {
             const lam = b.startsPerHour.reduce((a, c) => a + c, 0) / 168;

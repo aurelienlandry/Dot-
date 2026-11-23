@@ -13,6 +13,7 @@ Les données officielles restent les bienvenues : elles sont une source parmi d'
 
 | Source | Ce qu'elle dit | Force | Faiblesse | Défense |
 |---|---|---|---|---|
+| **Wi-Fi de la maison** (le téléphone passe du Wi-Fi aux données mobiles) | « la box vient de s'éteindre » | Marche même si le téléphone ne charge pas | La personne peut juste être sortie de chez elle | Indice faible seul, fort quand plusieurs voisins le font ensemble |
 | **Téléphones capteurs** (état de charge) | « la charge vient de s'arrêter / reprendre » | Automatique, à la minute près, sans effort | Un téléphone seul peut juste être débranché ; onduleur / groupe électrogène | **Simultanéité** : plusieurs téléphones distincts d'un même quartier dans la même fenêtre de 4 min |
 | **Signalements** « coupé / revenu » | état observé | Simple, couvre ceux sans capteur | Rares, en retard, parfois faux | Réputation + rendements décroissants |
 | **Incidents** (transfo en feu, poteau tombé, câble…) | une coupure va probablement arriver | **Anticipe** avant la coupure | Peut être faux ou ne pas causer de coupure | Pondéré par la réputation, recoupement par plusieurs témoins |
@@ -50,7 +51,7 @@ Code : `src/engine/nowcast.ts` (maintenant), `src/engine/forecast.ts` (prochaine
 | Téléphones capteurs par quartier | Coupures détectées | Délai médian | Fausses alertes | Gain prévision 1 h vs historique seul |
 |---|---|---|---|---|
 | 3 | 33 % | 12 min | 0,2 % du temps | +6 % |
-| 6 | 70 % | 6 min | 0,2 % du temps | +15 % |
+| 6 | 70 % → **84 %** depuis le passage aux positions | 6 min | 0,1 % du temps | +22 % |
 | 12 | 96 % | 5 min | 0,3 % du temps | +22 % |
 | 25 | 100 % | 5 min | 0,6 % du temps | +22 % |
 
@@ -60,7 +61,16 @@ Les trolls finissent à 50 % de fiabilité (aucune influence) ; les capteurs hon
 Il vaut mieux lancer **quartier par quartier** (viser **au moins 12 téléphones capteurs** dans un quartier : on passe de 70 % à 96 % de coupures détectées avant de passer au suivant)
 que s'étaler sur toute une ville. Le pilote naturel : ton propre quartier, ta famille, tes voisins, un groupe WhatsApp de quartier.
 
-## 5. Limites connues (honnêteté)
+## 5. Autres sources de données étudiées
+
+| Idée | Ce que ça donne vraiment | Verdict |
+|---|---|---|
+| **Réseaux sociaux** (pages ENEO, groupes Facebook, X, WhatsApp) | Les annonces de coupures programmées et beaucoup de « on a coupé chez nous ». Facebook n'autorise pas la collecte automatique des pages et groupes sans autorisation (API très restreinte) ; X est payant. | **Oui, mais légalement** : 1) saisir/importer les annonces ENEO (page `/admin.html`) ; 2) proposer aux admins de groupes WhatsApp/Facebook de quartier de relayer les alertes Dot et de signaler via l'appli ; 3) plus tard un bot WhatsApp où l'on écrit « coupé Makepe ». |
+| **Comportement d'Internet** | Quand le courant saute, les box Internet et certaines antennes s'éteignent. Des projets publics mesurent ça à l'échelle des régions (IODA, Cloudflare Radar). | **Oui, à deux niveaux** : dans l'appli, le téléphone qui perd le Wi-Fi de la maison (fait) ; à grande échelle, les données IODA pour détecter une grosse panne régionale (Littoral, Centre). Trop grossier pour un quartier. |
+| **Satellites (lumières la nuit)** | La NASA publie chaque nuit une carte des lumières (« Black Marble », ~500 m de précision), avec quelques heures de retard. | **Utile pour le bilan, pas pour le temps réel** : la nuit seulement, retard de plusieurs heures, et les nuages (très fréquents à Douala) cachent tout. Bon pour vérifier après coup les grosses coupures et l'historique. |
+| **Données des fournisseurs** | La source idéale. | À obtenir **une fois l'appli utilisée** : leur proposer gratuitement la carte des coupures en temps réel en échange de leurs données. |
+
+## 6. Limites connues (honnêteté)
 
 - **Le capteur web ne marche que appli ouverte** (et seulement sur Chrome Android). La vraie détection en continu demande une
   **appli Android native** (écoute de `ACTION_POWER_DISCONNECTED` en arrière-plan). C'est la priorité n°1 de la V2.
@@ -69,7 +79,7 @@ que s'étaler sur toute une ville. Le pilote naturel : ton propre quartier, ta f
   doit se faire dans le respect des conditions d'utilisation de ces plateformes.
 - Les chiffres du banc d'essai viennent d'un monde **simulé** : ils valident la logique, pas la réalité camerounaise. La vraie mesure sera la page « Fiabilité » une fois l'appli utilisée.
 
-## 6. Suite logique
+## 7. Suite logique
 
 1. Appli Android native (capteur en arrière-plan, notifications « coupure probable ce soir chez toi »).
 2. Bot / chaîne WhatsApp pour diffuser les alertes là où sont les gens.
