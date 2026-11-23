@@ -51,13 +51,13 @@ Code : `src/engine/nowcast.ts` (maintenant), `src/engine/forecast.ts` (prochaine
 |---|---|---|---|---|
 | 3 | 33 % | 12 min | 0,2 % du temps | +6 % |
 | 6 | 70 % | 6 min | 0,2 % du temps | +15 % |
-| 12 | RESULT12 |
-| 25 | RESULT25 |
+| 12 | 96 % | 5 min | 0,3 % du temps | +22 % |
+| 25 | 100 % | 5 min | 0,6 % du temps | +22 % |
 
 Les trolls finissent à 50 % de fiabilité (aucune influence) ; les capteurs honnêtes montent à ~90 %.
 
 **Conclusion pour la stratégie de lancement** : la fiabilité dépend surtout du **nombre de téléphones capteurs actifs par quartier**.
-Il vaut mieux lancer **quartier par quartier** (atteindre une dizaine de capteurs dans un quartier avant de passer au suivant)
+Il vaut mieux lancer **quartier par quartier** (viser **au moins 12 téléphones capteurs** dans un quartier : on passe de 70 % à 96 % de coupures détectées avant de passer au suivant)
 que s'étaler sur toute une ville. Le pilote naturel : ton propre quartier, ta famille, tes voisins, un groupe WhatsApp de quartier.
 
 ## 5. Limites connues (honnêteté)
