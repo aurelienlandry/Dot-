@@ -224,7 +224,7 @@ function bindZoneSelect() {
   sel.onchange = () => {
     if (!sel.value) return;
     store.set('home', sel.value);
-    location.hash = '#/';
+    location.hash = '#accueil';
     route();
   };
 }
@@ -351,7 +351,7 @@ async function viewZone(zoneId, isHome) {
   }
   document.getElementById('set-home')?.addEventListener('click', () => {
     store.set('home', zoneId);
-    location.hash = '#/';
+    location.hash = '#accueil';
   });
 }
 
@@ -376,7 +376,7 @@ async function viewCarte() {
     <svg class="map" viewBox="0 0 ${W} ${H}" role="img" aria-label="Carte schématique des quartiers">
       ${zones.map((z) => {
         const st = byId[z.id];
-        return `<a href="#/zone/${z.id}"><circle cx="${sx(z.lon)}" cy="${sy(z.lat)}" r="16" fill="${color(st.pOut)}" opacity="${st.confidence === 'faible' ? 0.45 : 0.95}"><title>${esc(z.name)} : ${pct(1 - st.pOut)} de courant</title></circle>
+        return `<a href="#zone-${z.id}"><circle cx="${sx(z.lon)}" cy="${sy(z.lat)}" r="16" fill="${color(st.pOut)}" opacity="${st.confidence === 'faible' ? 0.45 : 0.95}"><title>${esc(z.name)} : ${pct(1 - st.pOut)} de courant</title></circle>
         <text x="${sx(z.lon)}" y="${sy(z.lat) + 30}" text-anchor="middle">${esc(z.name)}</text></a>`;
       }).join('')}
     </svg>
@@ -385,7 +385,7 @@ async function viewCarte() {
   <section class="card">
     <ul class="zones">${sorted.map((z) => {
       const st = byId[z.id];
-      return `<li><span class="dot ${level(st.pOut)}"></span><a href="#/zone/${z.id}">${esc(z.name)}<span class="reason">${esc(st.since ? `Coupé depuis ${duration(s.at - st.since)}` : st.topReason ?? 'Pas de signal récent')}</span></a><span class="pct">${pct(1 - st.pOut)}</span></li>`;
+      return `<li><span class="dot ${level(st.pOut)}"></span><a href="#zone-${z.id}">${esc(z.name)}<span class="reason">${esc(st.since ? `Coupé depuis ${duration(s.at - st.since)}` : st.topReason ?? 'Pas de signal récent')}</span></a><span class="pct">${pct(1 - st.pOut)}</span></li>`;
     }).join('')}</ul>
     <p class="muted">Pourcentage = chance d'avoir le courant. Carte schématique (positions approximatives).</p>
   </section>`;
@@ -482,13 +482,14 @@ function setTab(tab) {
 }
 
 async function route() {
-  const h = location.hash.replace(/^#/, '') || '/';
+  // Routes en simple #nom (compatibles avec les liens partagés) : #carte, #bilan, #fiabilite, #zone-<id>.
+  const h = location.hash.replace(/^#\/?/, '');
   const home = store.get('home');
-  const zoneMatch = h.match(/^\/zone\/([a-z0-9-]+)$/);
+  const zoneMatch = h.match(/^zone[-/]([a-z0-9-]+)$/);
   if (zoneMatch) { setTab('carte'); return viewZone(zoneMatch[1], zoneMatch[1] === home); }
-  if (h === '/carte') { setTab('carte'); return viewCarte(); }
-  if (h === '/bilan') { setTab('bilan'); return viewBilan(); }
-  if (h === '/fiabilite') { setTab('fiabilite'); return viewFiabilite(); }
+  if (h === 'carte') { setTab('carte'); return viewCarte(); }
+  if (h === 'bilan') { setTab('bilan'); return viewBilan(); }
+  if (h === 'fiabilite') { setTab('fiabilite'); return viewFiabilite(); }
   setTab('home');
   return home ? viewZone(home, true) : viewWelcome();
 }
@@ -509,7 +510,7 @@ async function init() {
   if (store.get('sensor')) sensor.start();
   // Rafraîchissement discret quand l'écran est visible.
   setInterval(() => { if (document.visibilityState === 'visible' && !document.activeElement?.matches('input,select')) route(); }, 120000);
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+  if (!window.DOT_DEMO && 'serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
 }
 
 init();

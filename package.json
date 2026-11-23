@@ -12,6 +12,7 @@
     "demo": "node --disable-warning=ExperimentalWarning src/sim/seed-demo.ts && npm start",
     "seed:demo": "node --disable-warning=ExperimentalWarning src/sim/seed-demo.ts",
     "test": "node --disable-warning=ExperimentalWarning --test test/*.test.ts",
-    "backtest": "node --disable-warning=ExperimentalWarning src/sim/backtest.ts"
+    "backtest": "node --disable-warning=ExperimentalWarning src/sim/backtest.ts",
+    "build:demo": "node --disable-warning=ExperimentalWarning scripts/build-demo.ts"
   }
 }

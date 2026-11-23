@@ -14,10 +14,10 @@
   --accent-soft: #dbeafe;
   --planned: rgba(29, 78, 216, 0.12);
   --radius: 14px;
-  color-scheme: light dark;
+  color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #0b1120;
     --card: #131c2e;
     --text: #e5e9f0;
@@ -32,7 +32,25 @@
     --accent: #93b4ff;
     --accent-soft: #18264a;
     --planned: rgba(147, 180, 255, 0.14);
+    color-scheme: dark;
   }
+}
+:root[data-theme="dark"] {
+  --bg: #0b1120;
+  --card: #131c2e;
+  --text: #e5e9f0;
+  --muted: #9aa4b5;
+  --line: #243049;
+  --on: #4ade80;
+  --on-soft: #12301f;
+  --mid: #fbbf24;
+  --mid-soft: #33270b;
+  --out: #f87171;
+  --out-soft: #3a1414;
+  --accent: #93b4ff;
+  --accent-soft: #18264a;
+  --planned: rgba(147, 180, 255, 0.14);
+  color-scheme: dark;
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; }
@@ -45,13 +63,14 @@ body {
 a { color: var(--accent); }
 .top {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 12px 16px; position: sticky; top: 0; z-index: 5;
+  padding-block: 12px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
   background: var(--bg); border-bottom: 1px solid var(--line);
 }
 .brand { display: flex; gap: 8px; align-items: center; font-weight: 700; font-size: 20px; color: var(--text); text-decoration: none; }
 .net { font-size: 13px; background: var(--mid-soft); color: var(--mid); padding: 2px 10px; border-radius: 99px; }
 .demo { background: var(--accent-soft); color: var(--accent); font-size: 13px; padding: 6px 16px; text-align: center; }
-main { max-width: 640px; margin: 0 auto; padding: 12px 16px 24px; }
+main { max-width: 640px; margin: 0 auto; padding-block: 12px 24px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; }
 .card h2 { font-size: 15px; margin: 0 0 10px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
 .muted { color: var(--muted); font-size: 14px; }
