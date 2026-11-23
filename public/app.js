@@ -7,14 +7,29 @@ const TZ = 3600_000; // Africa/Douala (UTC+1)
 const DEMO = !!window.DOT_DEMO;
 
 // ---------- Stockage local (tout reste sur le téléphone, sauf le pseudo)
+// Si le navigateur bloque le stockage (navigation privée, aperçu…), on garde les données en mémoire.
+const memory = new Map();
 const store = {
-  get(k, d = null) { try { const v = localStorage.getItem(`dot.${k}`); return v === null ? d : JSON.parse(v); } catch { return d; } },
-  set(k, v) { try { localStorage.setItem(`dot.${k}`, JSON.stringify(v)); } catch { /* stockage indisponible */ } },
+  get(k, d = null) {
+    try {
+      const v = localStorage.getItem(`dot.${k}`);
+      if (v !== null) return JSON.parse(v);
+    } catch { /* stockage indisponible */ }
+    return memory.has(k) ? memory.get(k) : d;
+  },
+  set(k, v) {
+    memory.set(k, v);
+    try { localStorage.setItem(`dot.${k}`, JSON.stringify(v)); } catch { /* stockage indisponible */ }
+  },
 };
 let deviceId = store.get('device');
 if (!deviceId) {
   deviceId = Array.from(crypto.getRandomValues(new Uint8Array(12)), (b) => b.toString(16).padStart(2, '0')).join('');
   store.set('device', deviceId);
+}
+if (window.DOT_DEMO_SEED && store.get('places') === null) {
+  store.set('profile', window.DOT_DEMO_SEED.profile);
+  store.set('places', window.DOT_DEMO_SEED.places);
 }
 const places = () => store.get('places', []);
 const savePlaces = (list) => store.set('places', list);

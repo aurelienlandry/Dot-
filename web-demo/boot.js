@@ -32,16 +32,13 @@ window.fetch = async (input, init = {}) => {
   }
 };
 
-// Démo : un profil et une maison déjà placés à Kotto (coupure en cours), plus un lieu de travail à Akwa.
-try {
-  if (!localStorage.getItem('dot.places')) {
-    localStorage.setItem('dot.profile', JSON.stringify({ pseudo: 'Visiteur' }));
-    localStorage.setItem('dot.places', JSON.stringify([
-      { id: 'demo-home', type: 'maison', name: 'Maison', lat: 4.0752, lon: 9.7648, arrival: '19:00' },
-      { id: 'demo-work', type: 'travail', name: 'Bureau', lat: 4.0497, lon: 9.7003, arrival: '08:00' },
-    ]));
-  }
-} catch {
-  /* stockage indisponible : l'appli démarrera sur l'inscription */
-}
+// Démo : un profil et une maison déjà placés à Kotto (coupure en cours), plus un bureau à Akwa.
+// L'appli les reprend au démarrage si aucun lieu n'est encore enregistré.
+window.DOT_DEMO_SEED = {
+  profile: { pseudo: 'Visiteur' },
+  places: [
+    { id: 'demo-home', type: 'maison', name: 'Maison', lat: 4.0752, lon: 9.7648, arrival: '19:00' },
+    { id: 'demo-work', type: 'travail', name: 'Bureau', lat: 4.0497, lon: 9.7003, arrival: '08:00' },
+  ],
+};
 await import('./app.js');

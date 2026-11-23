@@ -1,39 +1,66 @@
-// Construit une démo autonome (sans serveur) dans dist-demo/ : le vrai moteur et le vrai service
-// tournent dans le navigateur sur des données simulées. Utilisée pour partager un lien de démonstration.
-//   npm run build:demo
+// Construit une démo autonome (sans serveur) : UN SEUL fichier HTML, tout le code inclus.
+// Le vrai moteur, le vrai service et les vraies routes de l'API tournent dans le navigateur
+// sur des données simulées. Sert à partager un lien de démonstration.
+//   npm run build:demo   →   dist-demo/index.html
 
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 
 const ROOT = join(import.meta.dirname, '..');
 const OUT = join(ROOT, 'dist-demo');
+// Ordre des dépendances : chaque module ne dépend que des précédents.
 const MODULES = [
-  'engine/types', 'engine/math', 'engine/reputation', 'engine/nowcast', 'engine/forecast', 'engine/baseline',
-  'engine/calibration', 'engine/episodes', 'engine/geo', 'data/zones', 'server/service', 'server/routes', 'sim/world', 'sim/scenario',
+  'engine/math', 'engine/reputation', 'engine/geo', 'engine/nowcast', 'engine/forecast', 'engine/baseline',
+  'engine/calibration', 'engine/episodes', 'data/zones', 'sim/world', 'sim/scenario', 'server/service', 'server/routes',
 ];
 
-rmSync(OUT, { recursive: true, force: true });
-for (const m of MODULES) {
-  const src = readFileSync(join(ROOT, 'src', `${m}.ts`), 'utf8');
-  const js = stripTypeScriptTypes(src, { mode: 'strip' }).replace(/(from\s+['"][^'"]+)\.ts(['"])/g, '$1.js$2');
-  const dest = join(OUT, 'js', `${m}.js`);
-  mkdirSync(dirname(dest), { recursive: true });
-  writeFileSync(dest, js);
+/** Retire les import/export : tous les modules partagent une seule portée. */
+function unmodule(js: string): string {
+  return js
+    .replace(/^\s*import\s[\s\S]*?\sfrom\s*['"][^'"]+['"];?/gm, '')
+    .replace(/^\s*import\s*['"][^'"]+['"];?/gm, '')
+    .replace(/^\s*export\s*\{[^}]*\};?/gm, '')
+    .replace(/^(\s*)export\s+(?=(async\s+)?function|const|let|class)/gm, '$1');
 }
-for (const f of ['memstore.js', 'boot.js']) writeFileSync(join(OUT, f), readFileSync(join(ROOT, 'web-demo', f)));
-writeFileSync(join(OUT, 'app.js'), readFileSync(join(ROOT, 'public', 'app.js')));
-writeFileSync(join(OUT, 'leaflet.js'), readFileSync(join(ROOT, 'public', 'vendor', 'leaflet', 'leaflet.js')));
+
+const engine = MODULES.map((m) => {
+  const js = stripTypeScriptTypes(readFileSync(join(ROOT, 'src', `${m}.ts`), 'utf8'), { mode: 'strip' });
+  return `// ---- ${m}\n${unmodule(js)}`;
+}).join('\n');
+const memstore = unmodule(readFileSync(join(ROOT, 'web-demo', 'memstore.js'), 'utf8'));
+const boot = unmodule(readFileSync(join(ROOT, 'web-demo', 'boot.js'), 'utf8')).replace(/^await import\('\.\/app\.js'\);?$/m, '');
+const app = readFileSync(join(ROOT, 'public', 'app.js'), 'utf8');
+const leaflet = readFileSync(join(ROOT, 'public', 'vendor', 'leaflet', 'leaflet.js'), 'utf8');
 
 const html = readFileSync(join(ROOT, 'public', 'index.html'), 'utf8');
-const body = html.slice(html.indexOf('<body>') + 6, html.indexOf('</body>'));
+const body = html
+  .slice(html.indexOf('<body>') + 6, html.indexOf('</body>'))
+  .replace(/<script[^>]*><\/script>\s*/g, '');
 const icon = `data:image/svg+xml;base64,${readFileSync(join(ROOT, 'public', 'icon.svg')).toString('base64')}`;
-const css = readFileSync(join(ROOT, 'public', 'vendor', 'leaflet', 'leaflet.css'), 'utf8') + '\n' + readFileSync(join(ROOT, 'public', 'style.css'), 'utf8');
+const css = `${readFileSync(join(ROOT, 'public', 'vendor', 'leaflet', 'leaflet.css'), 'utf8')}\n${readFileSync(join(ROOT, 'public', 'style.css'), 'utf8')}`;
+const safe = (s: string) => s.replace(/<\/script/gi, '<\\/script');
+
 const page = `<title>Dot Courant</title>
 <style>
 ${css}
 </style>
-${body.replace('src="/icon.svg"', `src="${icon}"`).replace('<script src="/vendor/leaflet/leaflet.js"></script>', '<script src="leaflet.js"></script>').replace('<script type="module" src="/app.js"></script>', '<script type="module" src="boot.js"></script>')}
+${body.replace('src="/icon.svg"', `src="${icon}"`)}
+<script>
+${safe(leaflet)}
+</script>
+<script>
+(() => {
+${safe(engine)}
+${safe(memstore)}
+${safe(boot)}
+})();
+</script>
+<script>
+${safe(app)}
+</script>
 `;
+rmSync(OUT, { recursive: true, force: true });
+mkdirSync(OUT, { recursive: true });
 writeFileSync(join(OUT, 'index.html'), page);
-console.log(`Démo construite dans ${OUT}`);
+console.log(`Démo construite : ${join(OUT, 'index.html')} (${Math.round(page.length / 1024)} Ko)`);
