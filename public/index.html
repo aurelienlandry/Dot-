@@ -5,25 +5,28 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Dot Courant</title>
   <meta name="description" content="Savoir s'il y a le courant chez soi et anticiper les coupures.">
-  <meta name="theme-color" content="#0f172a">
+  <meta name="theme-color" content="#0d1526">
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@600;700&display=swap">
   <link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
   <header class="top">
-    <a href="#accueil" class="brand"><img src="/icon.svg" alt="" width="28" height="28"> Dot</a>
+    <a href="#accueil" class="brand"><span class="spark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z" fill="#1a1400"/></svg></span>dot</a>
     <span id="net" class="net" hidden>Hors ligne</span>
   </header>
   <div id="demo" class="demo" hidden>Démonstration : les coupures affichées sont simulées.</div>
   <main id="view" aria-live="polite"></main>
-  <button id="fab" class="fab" type="button" hidden>Signaler</button>
-  <nav class="tabs" id="tabs">
-    <a href="#accueil" data-tab="accueil"><span aria-hidden="true">⌂</span>Accueil</a>
-    <a href="#carte" data-tab="carte"><span aria-hidden="true">◎</span>Carte</a>
-    <a href="#bilan" data-tab="bilan"><span aria-hidden="true">▤</span>Bilan</a>
-    <a href="#profil" data-tab="profil"><span aria-hidden="true">☺</span>Profil</a>
+  <button id="fab" class="fab" type="button" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 9-12h-7z" fill="currentColor"/></svg>Signaler</button>
+  <nav class="tabs" id="tabs" aria-label="Navigation">
+    <a href="#accueil" data-tab="accueil"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11 12 4l9 7"/><path d="M5 10v10h14V10"/></svg>Accueil</a>
+    <a href="#carte" data-tab="carte"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2z"/><path d="M9 4v14M15 6v14"/></svg>Carte</a>
+    <a href="#bilan" data-tab="bilan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Bilan</a>
+    <a href="#profil" data-tab="profil"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>Profil</a>
   </nav>
   <div id="sheet" class="sheet" hidden></div>
   <div id="toast" class="toast" role="status" hidden></div>

@@ -65,3 +65,19 @@ test('annonce officielle par quartiers (admin seulement)', () => {
   const place = call('GET', '/api/place?lat=4.063&lon=9.708').data;
   assert.equal(place.planned.length, 1);
 });
+
+test('même poste électrique : une coupure à Ngousso fait monter le risque à Olembé (5 km), pas à Biyem-Assi', () => {
+  const store = new Store(':memory:');
+  const service = new Service(store);
+  const routes = createRoutes(service, {});
+  const before = (service.placeDetail(3.948, 11.537, NOW).pOut);
+  for (let i = 0; i < 5; i++) {
+    routes({ method: 'POST', url: new URL('http://x/api/device'), body: { deviceId: `capteur${i}xyz`, lat: 3.9 + i * 0.0005, lon: 11.552, event: 'power_lost', at: NOW - 5 * MINUTE + i * 10_000 } }, NOW);
+  }
+  const olembe = service.placeDetail(3.948, 11.537, NOW);
+  const biyem = service.placeDetail(3.835, 11.485, NOW);
+  assert.equal(olembe.feeder, 'Poste de Ngousso');
+  assert.ok(olembe.pOut > before * 3, `${before} -> ${olembe.pOut}`);
+  assert.ok(biyem.pOut < 0.1);
+  assert.match(olembe.summary, /poste électrique/);
+});

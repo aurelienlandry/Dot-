@@ -241,6 +241,8 @@ export interface Peer {
   zone: Zone;
   local: LocalEvidence;
   distanceKm: number;
+  /** Alimenté par le même poste électrique : les coupures y sont très liées, même à plusieurs km. */
+  sameFeeder?: boolean;
 }
 
 /** Influence d'un endroit voisin : forte tout près, quasi nulle au-delà de 2–3 km. */
@@ -261,12 +263,12 @@ export function combine(zone: Zone, at: number, local: LocalEvidence, peers: Pee
   const evidence = local.evidence.slice();
   const props: Evidence[] = [];
   for (const peer of peers) {
-    const coef = propagationCoef(peer.distanceKm);
+    const coef = peer.sameFeeder ? Math.max(0.5, propagationCoef(peer.distanceKm)) : propagationCoef(peer.distanceKm);
     const c = clamp(coef * peer.local.propagable, -3 * coef, 5 * coef);
     if (Math.abs(c) < 0.1) continue;
     props.push({
       kind: 'propagation',
-      label: c > 0 ? `Coupure signalée à ${fmtKm(peer.distanceKm)}` : `Courant confirmé à ${fmtKm(peer.distanceKm)}`,
+      label: `${c > 0 ? 'Coupure signalée' : 'Courant confirmé'} à ${fmtKm(peer.distanceKm)}${peer.sameFeeder ? ' (même poste électrique)' : ''}`,
       logLR: c,
     });
   }
@@ -298,6 +300,7 @@ export function combine(zone: Zone, at: number, local: LocalEvidence, peers: Pee
  * (Le détail technique reste disponible pour le débogage, pas affiché.)
  */
 export function summarize(n: Nowcast): string {
+  const feederOut = n.evidence.some((e) => e.kind === 'propagation' && e.logLR > 0 && e.label.includes('même poste'));
   const out = n.pOut >= 0.5;
   const sum = (kinds: string[], sign: number) => n.evidence.filter((e) => kinds.includes(e.kind) && Math.sign(e.logLR) === sign).reduce((s, e) => s + Math.abs(e.logLR), 0);
   const sign = out ? 1 : -1;
@@ -309,11 +312,11 @@ export function summarize(n: Nowcast): string {
     if (planned > 0 && planned >= people) return 'Coupure programmée annoncée';
     if (people >= 1) return 'Confirmé par des habitants';
     if (incident >= 1) return 'Incident signalé tout près';
-    if (around >= 1) return 'Coupure signalée tout près';
+    if (around >= 1) return feederOut ? 'Coupure sur votre poste électrique' : 'Coupure signalée tout près';
     return 'Estimation';
   }
   if (incident >= 1) return 'Incident signalé tout près : risque de coupure';
-  if (sum(['propagation'], 1) >= 1) return 'Coupure signalée tout près';
+  if (sum(['propagation'], 1) >= 1) return feederOut ? 'Coupure sur votre poste électrique : risque élevé' : 'Coupure signalée tout près';
   if (people >= 1) return 'Confirmé par des habitants';
   if (around >= 1) return 'Courant confirmé aux alentours';
   return 'Aucune coupure signalée';

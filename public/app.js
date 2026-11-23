@@ -191,12 +191,15 @@ function nearestCity(lat, lon) {
 function status(d) {
   if (d.pOut >= 0.6) return { cls: 'out', word: 'Coupure', icon: '✕' };
   if (d.pOut >= 0.3) return { cls: 'mid', word: 'Risque de coupure', icon: '!' };
+  // Aucun signal réel autour : on ne prétend pas savoir.
+  if (d.confidence === 'faible' && !d.mine) return { cls: 'unk', word: 'Pas encore d’info', icon: '?' };
   return { cls: 'on', word: 'Courant', icon: '⚡' };
 }
 function mainLine(d) {
   if (d.pOut >= 0.6) {
     const parts = [];
-    if (d.since) parts.push(`Depuis ${duration(d.at - d.since)}`);
+    if (d.mine) parts.push('Signalé par vous');
+    if (d.since) parts.push(`${d.mine ? 'depuis' : 'Depuis'} ${duration(d.at - d.since)}`);
     parts.push(d.likelyRestore ? `retour probable ${when(d.likelyRestore)}` : 'retour incertain');
     return parts.join(' · ');
   }
@@ -204,6 +207,7 @@ function mainLine(d) {
   if (planned) return `Coupure annoncée ${dayWord(planned.start)} ${hhmm(planned.start)}–${hhmm(planned.end)}`;
   const risk = d.riskWindows[0];
   if (risk) return `Risque de coupure ${when(risk.start)}`;
+  if (status(d).cls === 'unk') return 'Personne n’a encore signalé autour. Dites-nous si vous avez le courant.';
   return d.summary;
 }
 function probAt(points, t) {
@@ -233,7 +237,7 @@ function strip(d, arrival) {
     hours.push({ t0, p: pts.length ? Math.max(...pts.map((x) => x.pOut)) : 0 });
   }
   const hourOf = (t) => new Date(t + TZ).getUTCHours();
-  const label = (t, i) => (i === 0 ? 'Maint.' : hourOf(t) % 3 === 0 ? `${hourOf(t)}h` : '');
+  const label = (t, i) => (i === 0 ? 'Maint.' : i >= 3 && hourOf(t) % 3 === 0 ? `${hourOf(t)}h` : '');
   return `<div class="strip" role="img" aria-label="Prévision heure par heure">
     ${hours.map((h, i) => `<div class="hr ${h.p >= 0.6 ? 'out' : h.p >= 0.3 ? 'mid' : 'on'}${arrival && arrival >= h.t0 && arrival < h.t0 + 3600000 ? ' arr' : ''}" title="${hhmm(h.t0)} : ${pct(1 - h.p)} de courant"><i></i><span>${label(h.t0, i)}</span></div>`).join('')}
   </div>
@@ -249,7 +253,7 @@ function setTab(tab) {
 
 /** Choisir un lieu sur la carte (inscription et ajout de lieu). */
 function placePicker({ title, intro, type, onDone, cancel }) {
-  const start = places()[0] ?? cityCenter('Douala');
+  const start = places()[0] ?? cityCenter(window.DOT_CITY ?? 'Douala');
   $view.innerHTML = `
   <section class="card">
     <h1>${esc(title)}</h1>
@@ -337,43 +341,91 @@ function viewOnboarding(step = store.get('profile')?.pseudo ? 2 : 1) {
   });
 }
 
+/**
+ * Ce que l'utilisateur a constaté lui-même sur place prime pour SON lieu :
+ * « coupé » vaut 3 h (ou jusqu'à ce qu'il dise « revenu »), « courant là » vaut 1 h.
+ * Pour les autres, un signalement isolé ne suffit pas (protection contre les faux).
+ */
+function withMine(p, d) {
+  const mine = store.get(`mine.${p.id}`);
+  if (!d || !mine) return d;
+  const age = Date.now() - mine.at;
+  if (mine.state === 'out' && age < 3 * 3600000) return { ...d, pOut: Math.max(d.pOut, 0.97), since: d.since ?? mine.at, summary: 'Signalé par vous', mine: true };
+  if (mine.state === 'on' && age < 3600000) return { ...d, pOut: Math.min(d.pOut, 0.03), since: null, summary: 'Confirmé par vous', mine: true };
+  return d;
+}
+
 async function loadPlace(p) {
   try {
     const d = await api(`/api/place?lat=${p.lat}&lon=${p.lon}`);
     store.set(`cache.${p.id}`, d);
-    return d;
+    return withMine(p, d);
   } catch {
-    return store.get(`cache.${p.id}`);
+    return withMine(p, store.get(`cache.${p.id}`));
   }
+}
+
+/** Jauge circulaire : chance d'avoir le courant maintenant. */
+function ring(d) {
+  const s = status(d);
+  const v = Math.round((1 - d.pOut) * 100);
+  const C = 2 * Math.PI * 30;
+  return `<svg class="ring ${s.cls}" viewBox="0 0 76 76" role="img" aria-label="${v} % de chances d'avoir le courant">
+    <circle class="track" cx="38" cy="38" r="30" fill="none" stroke-width="8"/>
+    <circle class="arc" cx="38" cy="38" r="30" fill="none" stroke-width="8" stroke-linecap="round" stroke-dasharray="${(C * v) / 100} ${C}" transform="rotate(-90 38 38)"/>
+    <text class="pc" x="38" y="41" text-anchor="middle"${v === 100 ? ' style="font-size:14px"' : ''}>${v}%</text>
+    <text class="lbl" x="38" y="53" text-anchor="middle">${s.cls === 'unk' ? 'ESTIMÉ' : 'COURANT'}</text>
+  </svg>`;
 }
 
 function placeCard(p, d, big = false) {
   const s = status(d);
-  return `<div class="row spread"><span class="pname">${ICONS[p.type] ?? '📍'} ${esc(p.name)}</span><span class="where">${esc(d.name)}</span></div>
-    <div class="state"><span class="badge ${s.cls}" aria-hidden="true">${s.icon}</span>${s.word}</div>
-    <div class="line">${esc(mainLine(d))}</div>
-    ${!big && arrivalLine(p, d) ? `<div class="arrival">${arrivalLine(p, d)}</div>` : ''}`;
+  const arr = arrivalLine(p, d);
+  return `${ring(d)}
+    <div class="body">
+      <div class="top-line"><span class="pname">${ICONS[p.type] ?? '📍'} ${esc(p.name)}</span><span class="where">${esc(d.name)}</span></div>
+      <div class="state">${s.word}</div>
+      <div class="line">${esc(mainLine(d))}</div>
+      ${!big && arr ? `<div class="chip">🕖 ${arr}</div>` : ''}
+    </div>`;
+}
+
+/** Une phrase pour résumer tous mes lieux. */
+function heroText(list, results) {
+  const out = list.filter((p, i) => results[i] && results[i].pOut >= 0.6);
+  const risk = list.filter((p, i) => results[i] && results[i].pOut >= 0.3 && results[i].pOut < 0.6);
+  if (out.length) return { title: `Coupure : ${out.map((p) => esc(p.name)).join(', ')}`, sub: 'Préparez-vous : lampes, batteries, eau.' };
+  if (risk.length) return { title: `Risque de coupure : ${risk.map((p) => esc(p.name)).join(', ')}`, sub: 'Rechargez vos appareils pendant que le courant est là.' };
+  if (!results.some(Boolean)) return { title: 'Données indisponibles', sub: 'Vérifiez votre connexion.' };
+  if (results.every((d) => !d || status(d).cls === 'unk')) return { title: 'Pas encore de signalement <span class="volt">autour de vous</span>', sub: 'Touchez « Signaler » pour dire si vous avez le courant : chaque signalement aide vos voisins.' };
+  return { title: 'Le courant est là <span class="volt">partout chez vous</span>', sub: "Aucune coupure signalée autour de vos lieux." };
 }
 
 async function viewAccueil() {
   setTab('accueil');
   const list = places();
   const pseudo = store.get('profile')?.pseudo;
-  $view.innerHTML = `<h1 class="hello">${greeting()}${pseudo ? ` ${esc(pseudo)}` : ''}</h1>
+  $view.innerHTML = `<section class="hero" id="hero"><p class="hello">${greeting()}${pseudo ? ` ${esc(pseudo)}` : ''}</p><h1>Vérification de vos lieux…</h1></section>
     ${list.map((p) => `<a class="card place" id="card-${p.id}" href="#lieu-${p.id}"><div class="skeleton-line"></div></a>`).join('')}
     <button class="add" id="add">+ Ajouter un lieu (travail, famille…)</button>`;
   document.getElementById('add').onclick = () => (location.hash = '#ajout');
-  await Promise.all(list.map(async (p) => {
+  const results = await Promise.all(list.map(async (p) => {
     const d = await loadPlace(p);
     const el = document.getElementById(`card-${p.id}`);
-    if (!el) return;
+    if (!el) return d;
     if (!d) {
-      el.innerHTML = '<p class="muted">Données indisponibles hors ligne.</p>';
-      return;
+      el.innerHTML = '<p class="muted" style="grid-column:1/-1">Données indisponibles hors ligne.</p>';
+      return d;
     }
     el.className = `card place ${status(d).cls}`;
     el.innerHTML = placeCard(p, d);
+    return d;
   }));
+  const hero = document.getElementById('hero');
+  if (hero) {
+    const h = heroText(list, results);
+    hero.innerHTML = `<p class="hello">${greeting()}${pseudo ? ` ${esc(pseudo)}` : ''}</p><h1>${h.title}</h1><p>${h.sub}</p>`;
+  }
 }
 
 async function viewLieu(id) {
@@ -401,6 +453,7 @@ async function viewLieu(id) {
   $view.innerHTML = `
   <a class="back" href="#accueil">‹ Mes lieux</a>
   <section class="card place big ${status(d).cls}">${placeCard(p, d, true)}</section>
+  ${d.feeder ? `<p class="muted">Alimenté par : <b>${esc(d.feeder)}</b> (d'après la presse, à confirmer).</p>` : ''}
   <section class="card">
     <h2>J'arrive à</h2>
     <div class="row"><input type="time" id="arrival" value="${esc(p.arrival ?? DEFAULT_ARRIVAL[p.type])}" aria-label="Heure d'arrivée"><span class="arrival">${arrivalLine(p, d) || 'Au-delà de 24 h, pas de prévision.'}</span></div>
@@ -423,7 +476,7 @@ async function viewLieu(id) {
     savePlaces(places().map((x) => (x.id === id ? { ...x, arrival: e.target.value || DEFAULT_ARRIVAL[x.type] } : x)));
     viewLieu(id);
   };
-  $view.querySelectorAll('[data-report]').forEach((b) => (b.onclick = () => report({ lat: p.lat, lon: p.lon }, b.dataset.report, () => viewLieu(id))));
+  $view.querySelectorAll('[data-report]').forEach((b) => (b.onclick = () => report({ lat: p.lat, lon: p.lon, placeId: p.id }, b.dataset.report, () => viewLieu(id))));
   const del = document.getElementById('del');
   del.onclick = () => {
     if (del.dataset.sure !== '1') {
@@ -439,6 +492,7 @@ async function viewLieu(id) {
 async function report(pos, state, then) {
   try {
     const r = await post('/api/report', { lat: pos.lat, lon: pos.lon, state });
+    if (pos.placeId) store.set(`mine.${pos.placeId}`, { state, at: Date.now() });
     toast(r.queued ? 'Pas de réseau : envoi automatique dès son retour.' : 'Merci ! Votre signalement aide vos voisins.');
     if (!r.queued && then) setTimeout(then, 300);
   } catch (err) {
@@ -469,7 +523,11 @@ function openSheet() {
     where = b.dataset.where;
     $sheet.querySelectorAll('[data-where]').forEach((x) => x.setAttribute('aria-pressed', x === b));
   }));
-  const resolvePos = async () => (where === 'gps' ? myPosition() : placeById(where));
+  const resolvePos = async () => {
+    if (where === 'gps') return myPosition();
+    const pl = placeById(where);
+    return { lat: pl.lat, lon: pl.lon, placeId: pl.id };
+  };
   $sheet.querySelectorAll('[data-s]').forEach((b) => (b.onclick = async () => {
     try {
       const pos = await resolvePos();
@@ -500,7 +558,7 @@ async function viewCarte() {
   $view.innerHTML = `
   <div class="seg">${meta.cities.map((c) => `<button data-city="${esc(c.name)}" aria-pressed="${c.name === city}">${esc(c.name)}</button>`).join('')}</div>
   <div id="bigmap" class="map tall"></div>
-  <div class="legend"><span><i class="sw out"></i>Coupure</span><span><i class="sw mid"></i>Risque</span><span><i class="sw plan"></i>Coupure annoncée</span><span><i class="sw me"></i>Mes lieux</span></div>
+  <div class="legend"><span><i class="sw out"></i>Coupure</span><span><i class="sw mid"></i>Risque</span><span><i class="sw plan"></i>Coupure annoncée</span><span><i class="sw me"></i>Mes lieux</span><span>• Signalements des 3 dernières heures</span></div>
   <section class="card" id="maplist"><p class="muted">Chargement…</p></section>`;
   $view.querySelectorAll('[data-city]').forEach((b) => (b.onclick = () => { store.set('city', b.dataset.city); viewCarte(); }));
   const center = home && nearestCity(home.lat, home.lon) === city ? home : cityCenter(city);
@@ -518,6 +576,7 @@ async function viewCarte() {
   for (const a of m.planned) L.circle([a.lat, a.lon], { radius: a.radiusM, color: color('--accent'), dashArray: '6 6', weight: 2, fillOpacity: 0.06 }).addTo(map).bindPopup(`<b>Coupure annoncée</b><br>${esc(a.label)}<br>${dayWord(a.start)} ${hhmm(a.start)}–${hhmm(a.end)}`);
   for (const a of m.risks) L.circle([a.lat, a.lon], { radius: a.radiusM, color: color('--mid'), weight: 1, fillOpacity: 0.25 }).addTo(map).bindPopup(`<b>Risque de coupure</b><br>${esc(a.name)}`);
   for (const a of m.outages) L.circle([a.lat, a.lon], { radius: a.radiusM, color: color('--out'), weight: 2, fillOpacity: 0.3 }).addTo(map).bindPopup(`<b>Coupure</b><br>${esc(a.name)}<br>Sur environ ${a.radiusM} m autour`);
+  for (const r of m.reports ?? []) L.circleMarker([r.lat, r.lon], { radius: 5, weight: 1, color: '#ffffff', fillColor: color(r.state === 'out' ? '--out' : '--on'), fillOpacity: 0.9 }).addTo(map).bindTooltip(`${r.state === 'out' ? 'Coupé' : 'Courant'} · signalé ${when(r.at)}`);
   for (const p of places()) L.circleMarker([p.lat, p.lon], { radius: 7, color: '#ffffff', weight: 2, fillColor: color('--accent'), fillOpacity: 1 }).addTo(map).bindTooltip(esc(p.name));
   const items = [
     ...m.outages.map((a) => `<li><span class="dot out"></span><span><b>Coupure</b> · ${esc(a.name)} <span class="muted">(environ ${a.radiusM} m autour)</span></span></li>`),
@@ -580,6 +639,7 @@ async function viewProfil() {
       <span class="muted">${sensorOk ? "Quand votre téléphone arrête de charger ou perd le Wi-Fi de la maison, Dot le note. Plus il y a de voisins qui l'activent, plus l'info est rapide et sûre." : 'Votre navigateur ne le permet pas (fonctionne avec Chrome sur Android).'}</span></span>
     </label>
   </section>
+  ${window.DOT_TEST ? `<section class="card"><h2>Test réel</h2><p class="notice">${window.DOT_SHARED === 'on' ? 'Vos signalements sont enregistrés et visibles par toutes les personnes qui ont ce lien. Rien n’est simulé.' : 'Vos signalements restent sur cet écran (connectez-vous à Claude pour les partager).'}</p></section>` : ''}
   <section class="card">
     <h2>Vie privée</h2>
     <p class="muted">Vos lieux restent sur ce téléphone. Les signalements sont envoyés avec une position arrondie à ~100 m. Aucun nom, numéro ou e-mail n'est demandé.</p>
@@ -646,7 +706,11 @@ async function init() {
     $view.innerHTML = '<section class="card">Connexion nécessaire au premier lancement.</section>';
     return;
   }
-  document.getElementById('demo').hidden = !meta.demo;
+  const banner = document.getElementById('demo');
+  if (window.DOT_BANNER) {
+    banner.textContent = window.DOT_BANNER;
+    banner.hidden = false;
+  } else banner.hidden = !meta.demo;
   addEventListener('hashchange', route);
   await route();
   flushQueue();
@@ -655,6 +719,11 @@ async function init() {
     const h = location.hash.replace(/^#/, '');
     if (document.visibilityState === 'visible' && $sheet.hidden && (h === '' || h === 'accueil' || h.startsWith('lieu-')) && !document.activeElement?.matches('input,select')) route();
   }, 120000);
+  // Nouvelles données partagées (test réel) : rafraîchir l'écran d'accueil ou de détail.
+  addEventListener('dot-data', () => {
+    const h = location.hash.replace(/^#/, '');
+    if ($sheet.hidden && (h === '' || h === 'accueil' || h.startsWith('lieu-') || h === 'carte') && !document.activeElement?.matches('input,select')) route();
+  });
   if (!DEMO && 'serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
 }
 

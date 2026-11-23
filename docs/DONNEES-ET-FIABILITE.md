@@ -70,7 +70,35 @@ que s'étaler sur toute une ville. Le pilote naturel : ton propre quartier, ta f
 | **Satellites (lumières la nuit)** | La NASA publie chaque nuit une carte des lumières (« Black Marble », ~500 m de précision), avec quelques heures de retard. | **Utile pour le bilan, pas pour le temps réel** : la nuit seulement, retard de plusieurs heures, et les nuages (très fréquents à Douala) cachent tout. Bon pour vérifier après coup les grosses coupures et l'historique. |
 | **Données des fournisseurs** | La source idéale. | À obtenir **une fois l'appli utilisée** : leur proposer gratuitement la carte des coupures en temps réel en échange de leurs données. |
 
-## 6. Limites connues (honnêteté)
+## 6. Méthodes d'apprentissage : ce qui tourne, ce qui viendra
+
+| Étape | Méthode | Statut |
+|---|---|---|
+| Fusion des signaux en temps réel | Bayésien en log-cotes, rendements décroissants, point de rupture | **En place** |
+| Fiabilité de chaque source | Loi Beta mise à jour en *leave-one-out* (inspiré des marchés de prédiction) | **En place** |
+| Heures et jours à risque | Taux de coupure par heure de la semaine, lissage hiérarchique ville → quartier | **En place** (s'améliore avec l'historique) |
+| Propagation | Distance + **même poste électrique** (Ngousso, BRGM, Ahala, Kondengui à Yaoundé) | **En place** |
+| Durée et heure de retour | Modèle à deux états (courant / coupé) avec taux de retour appris | **En place** ; ensuite modèle de survie (durée selon heure, saison, cause) |
+| Prévision avancée | Gradient boosting (heure, jour, météo, poste, historique récent) | **Après ~3 mois de vraies données** : sans données réelles, un modèle plus complexe apprendrait du bruit |
+| Cascades de coupures | Processus de Hawkes (une coupure en déclenche d'autres sur le même poste) | Plus tard |
+| Vérification | Score de Brier, diagramme de fiabilité, banc d'essai simulé | **En place** |
+
+Règle : **on ne complexifie le modèle que quand les données réelles le justifient**, et chaque nouveau modèle doit battre l'ancien sur les vraies données.
+
+## 7. Yaoundé : ce que l'on sait (presse) et le test réel
+
+Postes électriques et quartiers qu'ils alimentent, d'après la presse :
+- **Ngousso** : Ngousso, Olembé, Nkozoa, Akak ;
+- **BRGM** : Mokolo, Messa, École de Police, Tsinga, Bastos ;
+- **Ahala** : Simbock, Ezala, Mvog-Ebanda ;
+- **Kondengui** : Ekounou, Amassia, Gazoland, Ekoumdoum ;
+- **Oyomabang** : poste d'interconnexion par lequel passe l'énergie de Yaoundé.
+
+Depuis mai 2026, la distribution est assurée par la **SOCADEL** (ex-ENEO). Aucun programme public quotidien n'est publié en ligne : les annonces passent par communiqués (Facebook, WhatsApp, presse).
+
+Le **test réel** (page « Dot Yaoundé ») ne contient aucune donnée simulée : il part de zéro, affiche « Pas encore d'info » tant que personne n'a signalé, et enregistre les signalements dans une base partagée que l'on peut analyser ensuite.
+
+## 8. Limites connues (honnêteté)
 
 - **Le capteur web ne marche que appli ouverte** (et seulement sur Chrome Android). La vraie détection en continu demande une
   **appli Android native** (écoute de `ACTION_POWER_DISCONNECTED` en arrière-plan). C'est la priorité n°1 de la V2.
@@ -79,7 +107,7 @@ que s'étaler sur toute une ville. Le pilote naturel : ton propre quartier, ta f
   doit se faire dans le respect des conditions d'utilisation de ces plateformes.
 - Les chiffres du banc d'essai viennent d'un monde **simulé** : ils valident la logique, pas la réalité camerounaise. La vraie mesure sera la page « Fiabilité » une fois l'appli utilisée.
 
-## 7. Suite logique
+## 9. Suite logique
 
 1. Appli Android native (capteur en arrière-plan, notifications « coupure probable ce soir chez toi »).
 2. Bot / chaîne WhatsApp pour diffuser les alertes là où sont les gens.

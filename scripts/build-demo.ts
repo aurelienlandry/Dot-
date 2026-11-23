@@ -29,19 +29,21 @@ const engine = MODULES.map((m) => {
   return `// ---- ${m}\n${unmodule(js)}`;
 }).join('\n');
 const memstore = unmodule(readFileSync(join(ROOT, 'web-demo', 'memstore.js'), 'utf8'));
-const boot = unmodule(readFileSync(join(ROOT, 'web-demo', 'boot.js'), 'utf8')).replace(/^await import\('\.\/app\.js'\);?$/m, '');
 const app = readFileSync(join(ROOT, 'public', 'app.js'), 'utf8');
 const leaflet = readFileSync(join(ROOT, 'public', 'vendor', 'leaflet', 'leaflet.js'), 'utf8');
-
 const html = readFileSync(join(ROOT, 'public', 'index.html'), 'utf8');
 const body = html
   .slice(html.indexOf('<body>') + 6, html.indexOf('</body>'))
   .replace(/<script[^>]*><\/script>\s*/g, '');
 const icon = `data:image/svg+xml;base64,${readFileSync(join(ROOT, 'public', 'icon.svg')).toString('base64')}`;
+const fonts = html.match(/<link rel="stylesheet" href="https:\/\/fonts\.googleapis\.com[^>]*>/)?.[0] ?? '';
 const css = `${readFileSync(join(ROOT, 'public', 'vendor', 'leaflet', 'leaflet.css'), 'utf8')}\n${readFileSync(join(ROOT, 'public', 'style.css'), 'utf8')}`;
 const safe = (s: string) => s.replace(/<\/script/gi, '<\\/script');
 
-const page = `<title>Dot Courant</title>
+function page(title: string, bootFile: string): string {
+  const boot = unmodule(readFileSync(join(ROOT, 'web-demo', bootFile), 'utf8')).replace(/^await import\('\.\/app\.js'\);?$/m, '');
+  return `<title>${title}</title>
+${fonts}
 <style>
 ${css}
 </style>
@@ -60,7 +62,12 @@ ${safe(boot)}
 ${safe(app)}
 </script>
 `;
+}
+
 rmSync(OUT, { recursive: true, force: true });
 mkdirSync(OUT, { recursive: true });
-writeFileSync(join(OUT, 'index.html'), page);
-console.log(`Démo construite : ${join(OUT, 'index.html')} (${Math.round(page.length / 1024)} Ko)`);
+for (const [file, title, boot] of [['index.html', 'Dot Courant', 'boot.js'], ['test-yaounde.html', 'Dot Yaoundé', 'boot-test.js']]) {
+  const html = page(title, boot);
+  writeFileSync(join(OUT, file), html);
+  console.log(`${file} : ${Math.round(html.length / 1024)} Ko`);
+}

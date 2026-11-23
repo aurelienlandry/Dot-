@@ -1,7 +1,7 @@
 // Orchestration : relie le stockage au moteur. Tout se calcule à partir d'une position :
 // l'état d'un lieu = les signaux dans un rayon de 600 m + l'influence des alentours (jusqu'à 2,5 km).
 
-import { CITIES, CITY_COORDS, cityOf, placeName, QUARTIERS } from '../data/zones.ts';
+import { CITIES, CITY_COORDS, cityOf, feederOf, placeName, QUARTIERS } from '../data/zones.ts';
 import { CITY_KEY, defaultBaseline, learnBaselines, type Episode } from '../engine/baseline.ts';
 import { brier, reliabilityBuckets, truthFrom } from '../engine/calibration.ts';
 import { episodeStep } from '../engine/episodes.ts';
@@ -15,6 +15,8 @@ import type { Store } from './db.ts';
 
 export const PREDICTION_HORIZONS_H = [1, 3, 6];
 const MAX_TRACKED_CELLS = 400;
+/** Portée maximale d'un poste électrique (au-delà, on ignore même le même poste). */
+const FEEDER_RADIUS_KM = 8;
 
 export class Service {
   readonly store: Store;
@@ -48,12 +50,23 @@ export class Service {
     this.baselinesAt = now;
   }
 
+  private feederCache = new Map<string, string | undefined>();
+  private cellFeeder(cellId: string): string | undefined {
+    if (!this.feederCache.has(cellId)) {
+      const c = cellFromId(cellId);
+      this.feederCache.set(cellId, c ? feederOf(c.lat, c.lon) : undefined);
+    }
+    return this.feederCache.get(cellId);
+  }
+
   /** État du courant à une position et à un instant. */
   nowcastAt(lat: number, lon: number, at: number, excludeSource?: string): Nowcast {
     const city = cityOf(lat, lon);
     const cell = cellOf(lat, lon);
-    const zone: Zone = { id: cell.id, name: placeName(lat, lon), city, lat, lon };
-    const observations = this.store.observationsNear(lat, lon, RING_RADIUS_KM, at - INCIDENT_LOOKBACK_MS, at);
+    const feeder = feederOf(lat, lon);
+    const zone: Zone = { id: cell.id, name: placeName(lat, lon), city, lat, lon, feeder };
+    // Les alentours (2,5 km) comptent toujours ; plus loin, seulement les quartiers du même poste électrique.
+    const observations = this.store.observationsNear(lat, lon, feeder ? FEEDER_RADIUS_KM : RING_RADIUS_KM, at - INCIDENT_LOOKBACK_MS, at);
     const planned = this.store.plannedOverlapping(at, at);
     const weather = this.store.weatherFor(city, hourStart(at), hourStart(at)).get(hourStart(at));
     const reputations = this.store.allReputations();
@@ -61,9 +74,8 @@ export class Service {
     const rings = new Map<string, Observation[]>();
     for (const o of observations) {
       const d = haversineKm(lat, lon, o.lat, o.lon);
-      if (d > RING_RADIUS_KM) continue;
       if (d <= LOCAL_RADIUS_KM) local.push(o);
-      else {
+      else if (d <= RING_RADIUS_KM || (feeder && this.cellFeeder(o.zoneId) === feeder)) {
         if (!rings.has(o.zoneId)) rings.set(o.zoneId, []);
         rings.get(o.zoneId)!.push(o);
       }
@@ -76,7 +88,7 @@ export class Service {
       if (!c) continue;
       const pz: Zone = { id: cellId, name: '', city, lat: c.lat, lon: c.lon };
       const pl = localEvidence({ zone: pz, at, observations: obs, planned: [], reputations, baseline, excludeSource });
-      peers.push({ zone: pz, local: pl, distanceKm: haversineKm(lat, lon, c.lat, c.lon) });
+      peers.push({ zone: pz, local: pl, distanceKm: haversineKm(lat, lon, c.lat, c.lon), sameFeeder: !!feeder && this.cellFeeder(cellId) === feeder });
     }
     return combine(zone, at, mine, peers);
   }
@@ -110,6 +122,7 @@ export class Service {
     return {
       name: placeName(lat, lon),
       city,
+      feeder: feederOf(lat, lon) ?? null,
       pOut: nowcast.pOut,
       confidence: nowcast.confidence,
       summary: summarize(nowcast),
@@ -166,6 +179,12 @@ export class Service {
         .filter((p) => cityOf(p.lat, p.lon) === city)
         .map((p) => ({ lat: p.lat, lon: p.lon, radiusM: Math.round(p.radiusKm * 1000), label: p.label, start: p.start, end: p.end, active: p.start <= at })),
       quartiers: QUARTIERS.filter((q) => q.city === city).map(({ name: n, lat, lon }) => ({ name: n, lat, lon })),
+      /** Signalements bruts récents (positions déjà arrondies à ~100 m), pour la transparence. */
+      reports: this.store
+        .observationsNear(CITY_COORDS[city]?.lat ?? 0, CITY_COORDS[city]?.lon ?? 0, 30, at - 3 * HOUR, at)
+        .filter((o) => o.kind === 'report')
+        .slice(-300)
+        .map((o) => ({ lat: o.lat, lon: o.lon, state: o.kind === 'report' ? o.state : 'out', at: o.at })),
     };
   }
 
