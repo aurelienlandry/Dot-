@@ -13,6 +13,7 @@
     "seed:demo": "node --disable-warning=ExperimentalWarning src/sim/seed-demo.ts",
     "test": "node --disable-warning=ExperimentalWarning --test test/*.test.ts",
     "backtest": "node --disable-warning=ExperimentalWarning src/sim/backtest.ts",
-    "build:demo": "node --disable-warning=ExperimentalWarning scripts/build-demo.ts"
+    "build:demo": "node --disable-warning=ExperimentalWarning scripts/build-demo.ts",
+    "labo": "NODE_USE_ENV_PROXY=1 node --disable-warning=ExperimentalWarning scripts/labo-snapshot.ts && node scripts/build-labo.ts"
   }
 }

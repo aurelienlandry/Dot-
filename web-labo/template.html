@@ -1,0 +1,260 @@
+<title>Dot Labo Yaoundé</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@600;700&display=swap">
+<style>
+/* Labo : les signaux publics de Yaoundé face à ce que l'on constate chez soi. Même identité que Dot. */
+:root {
+  --bg: #eef1f7; --card: #ffffff; --text: #0d1526; --muted: #5d6880; --line: #dfe4ee;
+  --night: #0d1526; --night-2: #1a2742; --on-night: #f3f6fc; --volt: #ffd23f;
+  --on: #12a150; --on-soft: #ddf5e7; --mid: #dd8500; --out: #e0352b; --out-soft: #fde3e1;
+  --rain: #2b8cff; --accent: #2b59ff; --accent-soft: #e3eaff;
+  --shadow: 0 1px 2px rgba(13,21,38,.06), 0 8px 24px rgba(13,21,38,.06);
+  --font-display: "Sora", "Inter", system-ui, sans-serif; --font-body: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #070c18; --card: #101a2e; --text: #e8edf7; --muted: #93a0b8; --line: #1f2b45; --night: #050913; --night-2: #131f38;
+  --on: #3ccf7c; --on-soft: #0f2e1e; --mid: #ffab2e; --out: #ff5d52; --out-soft: #3a1513; --rain: #5aa8ff; --accent: #7d9bff; --accent-soft: #18244a;
+  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.25); color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #070c18; --card: #101a2e; --text: #e8edf7; --muted: #93a0b8; --line: #1f2b45; --night: #050913; --night-2: #131f38;
+  --on: #3ccf7c; --on-soft: #0f2e1e; --mid: #ffab2e; --out: #ff5d52; --out-soft: #3a1513; --rain: #5aa8ff; --accent: #7d9bff; --accent-soft: #18244a;
+  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.25); color-scheme: dark; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.45 var(--font-body); -webkit-font-smoothing: antialiased; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--night); }
+header { background: var(--night); color: var(--on-night); padding-block: 14px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.brand { font: 700 21px/1 var(--font-display); display: flex; gap: 8px; align-items: center; max-width: 680px; margin: 0 auto; }
+.brand .spark { width: 24px; height: 24px; border-radius: 50%; background: var(--volt); display: grid; place-items: center; box-shadow: 0 0 16px rgba(255,210,63,.5); }
+.brand small { font: 500 13px/1 var(--font-body); color: #aab6d3; margin-left: 4px; }
+main { max-width: 680px; margin: 0 auto; padding-block: 16px 40px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 12px; }
+main > * { min-width: 0; }
+h1, h2 { font-family: var(--font-display); margin: 0; }
+h1 { font-size: 24px; line-height: 1.2; text-wrap: balance; }
+h2 { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .07em; font-weight: 600; margin-bottom: 12px; }
+.card { background: var(--card); border-radius: 18px; padding: 18px; box-shadow: var(--shadow); }
+.hero { background: radial-gradient(120% 140% at 100% 0%, #2a3d6b 0%, var(--night-2) 45%, var(--night) 100%); color: var(--on-night); border-radius: 22px; padding: 22px 20px; box-shadow: var(--shadow); }
+.hero p { margin: 8px 0 0; color: #c8d2ea; font-size: 15px; }
+.hero .k { color: #aab6d3; font-size: 13px; margin: 0 0 6px; }
+.pill { display: inline-block; padding: 3px 10px; border-radius: 99px; font-size: 13px; font-weight: 600; }
+.pill.ok { background: var(--on-soft); color: var(--on); } .pill.bad { background: var(--out-soft); color: var(--out); }
+.muted { color: var(--muted); font-size: 14px; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+button, select, input { font: inherit; color: var(--text); background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; min-height: 46px; }
+button { cursor: pointer; font-weight: 600; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.big { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+.big button { min-height: 64px; font-size: 17px; border: 0; }
+.yes { background: var(--on-soft); color: var(--on); } .no { background: var(--out-soft); color: var(--out); }
+select, input { width: 100%; }
+label { display: block; font-size: 14px; color: var(--muted); margin-top: 10px; }
+label > select, label > input { margin-top: 6px; }
+.chart { width: 100%; height: auto; display: block; }
+.chart text { fill: var(--muted); font-size: 10px; font-family: var(--font-body); }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 8px; }
+.sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -2px; margin-right: 4px; }
+.seg { display: flex; gap: 6px; } .seg button { min-height: 34px; padding: 4px 12px; border-radius: 99px; font-weight: 500; }
+.seg button[aria-pressed="true"] { background: var(--night); color: var(--on-night); border-color: var(--night); }
+ul.list { list-style: none; padding: 0; margin: 0; }
+ul.list li { padding: 10px 0; border-top: 1px solid var(--line); display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: start; }
+ul.list li:first-child { border-top: 0; padding-top: 0; }
+.dot { width: 12px; height: 12px; border-radius: 50%; margin-top: 5px; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
+.kpi { background: var(--bg); border-radius: 14px; padding: 12px; }
+.kpi b { display: block; font: 700 24px/1.1 var(--font-display); font-variant-numeric: tabular-nums; }
+.kpi span { font-size: 12.5px; color: var(--muted); }
+.lessons li { margin: 6px 0; }
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(24px + env(safe-area-inset-bottom, 0px)); background: var(--night); color: var(--on-night); padding: 11px 18px; border-radius: 14px; font-size: 14px; max-width: calc(100% - 32px); z-index: 30; }
+[hidden] { display: none !important; }
+</style>
+
+<header><div class="brand"><span class="spark" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z" fill="#1a1400"/></svg></span>dot <small>Labo · Yaoundé</small></div></header>
+<main>
+  <section class="hero" id="hero"></section>
+
+  <section class="card">
+    <h2>Chez moi, en ce moment</h2>
+    <p class="muted" style="margin:0">Chaque vérification est un exemple réel. Plus tu en fais, plus on saura si les signaux publics voient tes coupures.</p>
+    <label>Mon quartier<select id="quartier"></select></label>
+    <div class="big"><button class="yes" id="btn-yes" type="button">J'ai le courant</button><button class="no" id="btn-no" type="button">Pas de courant</button></div>
+    <label>Remarque (facultatif)<input id="note" maxlength="140" placeholder="Ex. : coupé depuis 18h, tout le quartier"></label>
+  </section>
+
+  <section class="card">
+    <h2>Mes vérifications</h2>
+    <div class="kpis" id="kpis"></div>
+    <ul class="list" id="checks" style="margin-top:12px"></ul>
+  </section>
+
+  <section class="card">
+    <div class="row" style="justify-content:space-between;margin-bottom:10px"><h2 style="margin:0">Internet dans la région de Yaoundé</h2>
+      <div class="seg" role="group" aria-label="Période"><button type="button" data-days="7" aria-pressed="true">7 jours</button><button type="button" data-days="30" aria-pressed="false">30 jours</button></div></div>
+    <div id="chart"></div>
+    <div class="legend"><span><i class="sw" style="background:var(--accent)"></i>Connexions qui répondent (100 % = normal)</span><span><i class="sw" style="background:var(--out);opacity:.35"></i>Panne détectée par IODA</span><span><i class="sw" style="background:var(--rain)"></i>Pluie</span><span><i class="sw" style="background:var(--volt)"></i>Mes vérifications</span></div>
+  </section>
+
+  <section class="card">
+    <h2>Ce que les données nous ont déjà appris</h2>
+    <ul class="lessons" id="lessons"></ul>
+  </section>
+
+  <p class="muted" id="sources"></p>
+</main>
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+const DATA = /*DATA*/null;
+const QUARTIERS = ['Ngousso','Olembé','Nkozoa','Bastos','Tsinga','Messa','Mokolo','Simbock','Mvog-Ebanda','Ahala','Ekounou','Kondengui','Ekoumdoum','Emana','Etoudi','Nlongkak','Elig-Essono','Centre-ville','Essos','Mimboman','Mvog-Mbi','Obili','Melen','Mvan','Odza','Biyem-Assi','Mendong','Nkolbisson','Autre'];
+const TZ = 3600000;
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const fmt = (t, withDay = true) => {
+  const d = new Date(t + TZ);
+  const day = ['dim.', 'lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.'][d.getUTCDay()];
+  const hm = `${d.getUTCHours()}h${String(d.getUTCMinutes()).padStart(2, '0')}`;
+  return withDay ? `${day} ${d.getUTCDate()}/${d.getUTCMonth() + 1} ${hm}` : hm;
+};
+const local = {
+  get(k, d) { try { const v = localStorage.getItem('dotlabo.' + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem('dotlabo.' + k, JSON.stringify(v)); } catch { /* indisponible */ } },
+};
+let toastTimer;
+function toast(m) { const el = $('toast'); el.textContent = m; el.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => (el.hidden = true), 3200); }
+
+// ---------- Ce que disaient les signaux à un instant donné
+const hours = DATA.hours;
+function signalsAt(t) {
+  if (t < hours[0].t || t > DATA.generatedAt) return null;
+  const h = hours.find((x) => t >= x.t && t < x.t + 3600000);
+  const ev = DATA.events.find((e) => t >= e.start - 15 * 60000 && t <= e.end + 15 * 60000);
+  const net = h?.net ?? null;
+  const disturbed = !!ev || (net !== null && net < 0.8);
+  const rain = h ? h.rain : 0;
+  return { disturbed, net, event: ev, rain, storm: h?.storm };
+}
+
+// ---------- Bandeau : l'état de la région au dernier relevé
+function hero() {
+  const last = hours.filter((h) => h.t <= DATA.generatedAt && h.net !== null).slice(-3);
+  const worst = Math.min(...last.map((h) => h.net));
+  const ev = DATA.events.find((e) => e.end >= DATA.generatedAt - 3 * 3600000);
+  const ok = !ev && worst >= 0.85;
+  const next = hours.filter((h) => h.t > DATA.generatedAt && h.t <= DATA.generatedAt + 12 * 3600000);
+  const storm = next.find((h) => h.storm || h.rain >= 4);
+  $('hero').innerHTML = `<p class="k">Relevé du ${fmt(DATA.generatedAt)} · mis à jour à ta demande</p>
+    <h1>${ok ? 'Internet normal dans la région de Yaoundé' : 'Perturbation d’Internet dans la région de Yaoundé'}</h1>
+    <p>${ok ? 'Pas de grande panne visible au moment du relevé. Une coupure limitée à quelques quartiers peut quand même passer inaperçue.' : 'Une partie des connexions ne répond plus : coupure d’électricité ou panne du réseau Internet.'}</p>
+    <p>${storm ? `🌧️ ${storm.storm ? 'Orage' : 'Forte pluie'} prévu vers ${fmt(storm.t, false)} : risque accru de coupure.` : '🌤️ Pas d’orage prévu dans les 12 heures suivant le relevé.'}</p>`;
+}
+
+// ---------- Graphique
+function chart(days) {
+  const t1 = DATA.generatedAt, t0 = t1 - days * 86400000;
+  const pts = hours.filter((h) => h.t >= t0 && h.t <= t1);
+  const W = 640, H = 190, top = 10, mid = 140, bottom = 172;
+  const x = (t) => ((t - t0) / (t1 - t0)) * W;
+  const y = (r) => top + (1.1 - Math.min(1.1, Math.max(0.3, r))) / 0.8 * (mid - top);
+  let line = '', pen = false;
+  for (const p of pts) {
+    if (p.net === null) { pen = false; continue; }
+    line += `${pen ? 'L' : 'M'}${x(p.t).toFixed(1)},${y(p.net).toFixed(1)}`;
+    pen = true;
+  }
+  const evs = DATA.events.filter((e) => e.end >= t0).map((e) => `<rect x="${x(Math.max(t0, e.start))}" y="${top}" width="${Math.max(3, x(e.end) - x(Math.max(t0, e.start)))}" height="${mid - top}" fill="var(--out)" opacity=".18"><title>Panne IODA ${fmt(e.start)} → ${fmt(e.end)}${e.alsoDouala ? ' (aussi à Douala : réseau national)' : ''}</title></rect>`).join('');
+  const maxRain = Math.max(5, ...pts.map((p) => p.rain));
+  const rain = pts.filter((p) => p.rain > 0).map((p) => `<rect x="${x(p.t)}" y="${bottom - (p.rain / maxRain) * 26}" width="${Math.max(1.5, W / pts.length)}" height="${(p.rain / maxRain) * 26}" fill="var(--rain)"/>`).join('');
+  const mine = checks.filter((c) => c.at >= t0 && c.at <= t1).map((c) => `<circle cx="${x(c.at)}" cy="${mid - 6}" r="5" fill="var(--volt)" stroke="${c.power ? 'var(--on)' : 'var(--out)'}" stroke-width="2"><title>${c.power ? 'Courant' : 'Coupure'} · ${esc(c.quartier)} · ${fmt(c.at)}</title></circle>`).join('');
+  let ticks = '';
+  const stepDays = days > 10 ? 5 : 1;
+  for (let t = Math.ceil((t0 + TZ) / 86400000) * 86400000 - TZ; t <= t1; t += stepDays * 86400000) {
+    const d = new Date(t + TZ);
+    ticks += `<line x1="${x(t)}" x2="${x(t)}" y1="${top}" y2="${mid}" stroke="var(--line)"/><text x="${x(t) + 3}" y="${H - 2}">${d.getUTCDate()}/${d.getUTCMonth() + 1}</text>`;
+  }
+  $('chart').innerHTML = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Connectivité Internet de la région de Yaoundé">
+    ${ticks}
+    <line x1="0" x2="${W}" y1="${y(1)}" y2="${y(1)}" stroke="var(--muted)" stroke-dasharray="4 4" opacity=".6"/><text x="4" y="${y(1) - 3}">normal</text>
+    <line x1="0" x2="${W}" y1="${y(0.8)}" y2="${y(0.8)}" stroke="var(--out)" stroke-dasharray="2 4" opacity=".5"/><text x="4" y="${y(0.8) - 3}">80 %</text>
+    ${evs}<path d="${line}" fill="none" stroke="var(--accent)" stroke-width="1.6"/>${rain}${mine}
+  </svg>`;
+}
+
+// ---------- Mes vérifications (base partagée de la page si disponible, sinon ce téléphone)
+let checks = local.get('checks', []);
+let shared = null;
+let chain = Promise.resolve();
+function render() {
+  const sorted = checks.slice().sort((a, b) => b.at - a.at);
+  const compared = sorted.map((c) => ({ c, s: signalsAt(c.at) })).filter((x) => x.s);
+  const outs = compared.filter((x) => !x.c.power);
+  const seen = outs.filter((x) => x.s.disturbed);
+  const falseAlarm = compared.filter((x) => x.c.power && x.s.disturbed);
+  $('kpis').innerHTML = `<div class="kpi"><b>${checks.length}</b><span>vérifications</span></div>
+    <div class="kpi"><b>${checks.filter((c) => !c.power).length}</b><span>coupures constatées</span></div>
+    <div class="kpi"><b>${outs.length ? `${seen.length}/${outs.length}` : '—'}</b><span>coupures que les signaux ont vues</span></div>
+    <div class="kpi"><b>${falseAlarm.length}</b><span>fois où les signaux s'alarmaient alors que j'avais le courant</span></div>`;
+  $('checks').innerHTML = sorted.length ? sorted.slice(0, 40).map((c) => {
+    const s = signalsAt(c.at);
+    const verdict = !s ? '<span class="muted">À comparer après la prochaine mise à jour des données</span>'
+      : `<span class="pill ${s.disturbed === !c.power ? 'ok' : 'bad'}">${s.disturbed === !c.power ? 'Concorde' : 'Ne concorde pas'}</span> <span class="muted">Signaux : ${s.disturbed ? 'perturbation' : 'normal'}${s.rain ? `, pluie ${s.rain} mm` : ''}</span>`;
+    return `<li><span class="dot" style="background:${c.power ? 'var(--on)' : 'var(--out)'}"></span><div><b>${c.power ? 'Courant' : 'Pas de courant'}</b> · ${esc(c.quartier)} · ${fmt(c.at)}${c.note ? `<div class="muted">${esc(c.note)}</div>` : ''}<div>${verdict}</div></div></li>`;
+  }).join('') : '<li><span></span><span class="muted">Aucune vérification pour l’instant. Touche « J’ai le courant » ou « Pas de courant » ci-dessus.</span></li>';
+  chart(Number(document.querySelector('[data-days][aria-pressed="true"]').dataset.days));
+}
+
+async function add(power) {
+  const c = { id: Math.random().toString(36).slice(2, 12), at: Date.now(), power, quartier: $('quartier').value, note: $('note').value.trim().slice(0, 140) };
+  checks.push(c);
+  local.set('checks', checks.slice(-500));
+  local.set('quartier', c.quartier);
+  $('note').value = '';
+  render();
+  toast(shared ? 'Enregistré. Merci !' : 'Enregistré sur ce téléphone.');
+  if (shared) {
+    chain = chain.then(async () => {
+      const ref = shared.db.collection('checks').doc(shared.uid);
+      const snap = await ref.get();
+      const items = Array.isArray(snap.data()?.items) ? snap.data().items : [];
+      await ref.set({ items: [...items, c].slice(-500), updatedAt: Date.now() });
+    }).catch(() => toast('Enregistré sur ce téléphone seulement (partage indisponible).'));
+  }
+}
+
+$('quartier').innerHTML = QUARTIERS.map((q) => `<option ${q === local.get('quartier', '') ? 'selected' : ''}>${esc(q)}</option>`).join('');
+$('btn-yes').onclick = () => add(true);
+$('btn-no').onclick = () => add(false);
+document.querySelectorAll('[data-days]').forEach((b) => (b.onclick = () => {
+  document.querySelectorAll('[data-days]').forEach((x) => x.setAttribute('aria-pressed', x === b));
+  render();
+}));
+
+// Leçons tirées des données réelles du relevé
+(function lessons() {
+  const evs = DATA.events;
+  const national = evs.filter((e) => e.alsoDouala).length;
+  const longest = evs.reduce((m, e) => (e.end - e.start > m.end - m.start ? e : m), evs[0] ?? { start: 0, end: 0 });
+  $('lessons').innerHTML = `
+    <li><b>${evs.length} pannes d’Internet</b> détectées par IODA dans la région de Yaoundé en 30 jours.</li>
+    <li><b>${national}</b> d’entre elles ont touché Douala à la même minute : c’est le réseau Internet national qui flanche, pas l’électricité d’un quartier.</li>
+    ${longest.end ? `<li>La plus longue (${fmt(longest.start)} → ${fmt(longest.end)}) ne correspond à aucune coupure d’électricité annoncée : très probablement une panne des opérateurs.</li>` : ''}
+    <li>La coupure annoncée par le ministère le <b>mer. 4/11 de 15h à 21h</b> dans le Centre <b>n’apparaît pas</b> dans ces signaux.</li>
+    <li>Conclusion : ces signaux publics ne suffisent pas seuls. Tes vérifications sur place sont ce qui permettra de mesurer s’ils annoncent vraiment tes coupures.</li>`;
+})();
+$('sources').textContent = `Sources : ${DATA.sources.join(' · ')}. Données non en temps réel : relevé du ${fmt(DATA.generatedAt)}.`;
+hero();
+render();
+
+(async () => {
+  try {
+    const db = await window.claude?.use?.('db');
+    const user = await window.claude?.use?.('user');
+    if (!db || !user) return;
+    const uid = await user.id();
+    shared = { db, uid };
+    const snap = await db.collection('checks').doc(uid).get();
+    const remote = Array.isArray(snap.data()?.items) ? snap.data().items : [];
+    const ids = new Set(checks.map((c) => c.id));
+    for (const c of remote) if (c && typeof c.at === 'number' && !ids.has(c.id)) checks.push({ id: String(c.id), at: c.at, power: !!c.power, quartier: String(c.quartier ?? ''), note: String(c.note ?? '').slice(0, 140) });
+    local.set('checks', checks.slice(-500));
+    render();
+  } catch { /* partage indisponible : on garde ce téléphone */ }
+})();
+</script>
